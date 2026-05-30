@@ -235,6 +235,47 @@ export const skills: Record<string, SkillDefinition> = {
     },
   },
 
+  hoshigumaWarpath: {
+    id: "hoshigumaWarpath",
+    name: "战意",
+    description: "26 秒内防御力 +65%，攻击力 +30%",
+    initialSp: 20,
+    maxSp: 44,
+    duration: 26,
+    spRecoveryType: "natural",
+    activate: ({ self, log }) => {
+      self.addBuff({ type: "defense", value: 1.65, duration: 26 });
+      self.addBuff({ type: "attack", value: 1.3, duration: 26 });
+      log(`${self.definition.name} 开启战意，攻防提升`);
+    },
+  },
+
+  hoshigumaThorns: {
+    id: "hoshigumaThorns",
+    name: "荆棘",
+    description: "被动：每次受到攻击时，对伤害来源造成 80% 攻击力的物理伤害",
+    initialSp: 0,
+    maxSp: 0,
+    passive: true,
+    activate: () => {},
+  },
+
+  hoshigumaSaw: {
+    id: "hoshigumaSaw",
+    name: "力之锯",
+    description: "25 秒内攻击力 +95%，防御力 +60%，切割前方一格敌人",
+    initialSp: 26,
+    maxSp: 54,
+    duration: 25,
+    skillRangeId: "hoshigumaDefault",
+    spRecoveryType: "natural",
+    activate: ({ self, log }) => {
+      self.addBuff({ type: "attack", value: 1.95, duration: 25 });
+      self.addBuff({ type: "defense", value: 1.6, duration: 25 });
+      log(`${self.definition.name} 开启力之锯，盾牌开始高速切割`);
+    },
+  },
+
   ironWall: {
     id: "ironWall",
     name: "力之锯",

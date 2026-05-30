@@ -12,6 +12,7 @@ export const operatorCellByRange: Record<AttackRangeId, RangeCell> = {
   chenSkill2: { x: 0, y: 0 },
   chenSkill3: { x: 0, y: 0 },
   exusiaiDefault: { x: 0, y: 0 },
+  hoshigumaDefault: { x: 0, y: 0 },
   sariaDefault: { x: 0, y: 0 },
   sariaSkill1: { x: 0, y: 0 },
   sariaSkill2: { x: 0, y: 0 },
@@ -91,6 +92,9 @@ export const attackCellsByRange: Record<AttackRangeId, RangeCell[]> = {
     { x: 2, y: 1 },
     { x: 3, y: 1 },
   ],
+  hoshigumaDefault: [
+    { x: 1, y: 0 },
+  ],
   sariaDefault: [{ x: 0, y: 0 }],
   sariaSkill1: [
     { x: -1, y: -1 },
@@ -127,10 +131,7 @@ export const attackCellsByRange: Record<AttackRangeId, RangeCell[]> = {
     { x: 1, y: 2 },
   ],
   sariaSkill3: [
-    { x: 0, y: -4 },
-    { x: -1, y: -3 },
     { x: 0, y: -3 },
-    { x: 1, y: -3 },
     { x: -1, y: -2 },
     { x: 0, y: -2 },
     { x: 1, y: -2 },
@@ -139,7 +140,6 @@ export const attackCellsByRange: Record<AttackRangeId, RangeCell[]> = {
     { x: 0, y: -1 },
     { x: 1, y: -1 },
     { x: 2, y: -1 },
-    { x: -4, y: 0 },
     { x: -3, y: 0 },
     { x: -2, y: 0 },
     { x: -1, y: 0 },
@@ -147,7 +147,6 @@ export const attackCellsByRange: Record<AttackRangeId, RangeCell[]> = {
     { x: 1, y: 0 },
     { x: 2, y: 0 },
     { x: 3, y: 0 },
-    { x: 4, y: 0 },
     { x: -2, y: 1 },
     { x: -1, y: 1 },
     { x: 0, y: 1 },
@@ -156,10 +155,7 @@ export const attackCellsByRange: Record<AttackRangeId, RangeCell[]> = {
     { x: -1, y: 2 },
     { x: 0, y: 2 },
     { x: 1, y: 2 },
-    { x: -1, y: 3 },
     { x: 0, y: 3 },
-    { x: 1, y: 3 },
-    { x: 0, y: 4 },
   ],
   forwardShort: [
     { x: 1, y: -1 },
@@ -200,6 +196,10 @@ export const displayCellsByRange: Record<AttackRangeId, RangeCell[]> = {
   exusiaiDefault: [
     ...attackCellsByRange.exusiaiDefault,
     operatorCellByRange.exusiaiDefault,
+  ],
+  hoshigumaDefault: [
+    ...attackCellsByRange.hoshigumaDefault,
+    operatorCellByRange.hoshigumaDefault,
   ],
   sariaDefault: [...attackCellsByRange.sariaDefault],
   sariaSkill1: [...attackCellsByRange.sariaSkill1],

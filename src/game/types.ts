@@ -19,6 +19,7 @@ export type AttackRangeId =
   | "chenSkill2"
   | "chenSkill3"
   | "exusiaiDefault"
+  | "hoshigumaDefault"
   | "sariaDefault"
   | "sariaSkill1"
   | "sariaSkill2"
@@ -30,6 +31,7 @@ export type BuffType =
   | "speed"
   | "damageReduction"
   | "attack"
+  | "defense"
   | "attackSpeed"
   | "attackInterval"
   | "maxHp"
@@ -75,6 +77,7 @@ export interface OperatorDefinition {
   maxHpMultiplier?: number;
   defenseMultiplier?: number;
   physicalDodge?: number;
+  damageBlockChance?: number;
   skillId: string;
 }
 
@@ -116,6 +119,7 @@ export interface SkillDefinition {
   spCost?: number;
   spRecoveryType?: SpRecoveryType;
   autoActivate?: boolean;
+  passive?: boolean;
   canActivate?: (ctx: SkillContext) => boolean;
   activate: (ctx: SkillContext) => void;
 }
@@ -131,12 +135,14 @@ export interface OperatorRuntimeLike {
   defense: number;
   resistance: number;
   physicalDodge: number;
+  damageBlockChance: number;
   speed: number;
   damageType: DamageType;
   attackInterval: number;
   attackRangeId: AttackRangeId;
   displayRangeId: AttackRangeId;
   rangeTileSize: number;
+  skill: SkillDefinition;
   isStunned: boolean;
   isSkillActive: boolean;
   artsFragileMultiplier: number;
@@ -182,6 +188,7 @@ export interface OperatorSnapshot {
 }
 
 export interface BattleCastSnapshot {
+  id: number;
   message: string;
   age: number;
   duration: number;
@@ -189,6 +196,7 @@ export interface BattleCastSnapshot {
 
 export interface FloatingDamageSnapshot {
   id: number;
+  kind: "damage" | "sp";
   amount: number;
   x: number;
   y: number;
@@ -212,7 +220,7 @@ export interface BattleSnapshot {
   right: OperatorSnapshot;
   damageNumbers: FloatingDamageSnapshot[];
   projectiles: ProjectileSnapshot[];
-  battleCast: BattleCastSnapshot | null;
+  battleCast: BattleCastSnapshot[];
   elapsed: number;
   running: boolean;
   winnerName: string | null;

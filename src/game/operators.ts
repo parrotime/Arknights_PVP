@@ -64,22 +64,25 @@ export const operators: OperatorDefinition[] = [
   },
   {
     id: "hoshiguma",
+    englishName: "Hoshiguma",
     name: "星熊",
     role: "defender",
     attackMode: "melee",
-    maxHp: 2050,
-    attack: 76,
-    defense: 62,
+    maxHp: 38500,
+    attack: 430,
+    defense: 723,
     resistance: 0,
     damageType: "physical",
-    attackInterval: 1.6,
-    attackRangeId: "forwardShort",
+    attackInterval: 1.2,
+    attackRangeId: "hoshigumaDefault",
     rangeTileSize: 64,
     radius: 34,
     speed: 200,
-    spRegen: 12,
+    spRegen: 1,
     spRecoveryType: "natural",
-    skillId: "ironWall",
+    defenseMultiplier: 1.06,
+    damageBlockChance: 0.25,
+    skillId: "hoshigumaWarpath",
   },
   {
     id: "exusiai",
@@ -146,7 +149,12 @@ export const operators: OperatorDefinition[] = [
 ];
 
 for (const operator of operators) {
-  if (operator.id !== "chen" && operator.id !== "exusiai" && operator.id !== "saria") {
+  if (
+    operator.id !== "chen" &&
+    operator.id !== "exusiai" &&
+    operator.id !== "saria" &&
+    operator.id !== "hoshiguma"
+  ) {
     operator.maxHp *= 10;
   }
 }

@@ -7,6 +7,8 @@ import type {
   SkillDefinition,
 } from "./types";
 
+const smoothTurnRadiansPerSecond = (30 * Math.PI) / 180;
+
 export class OperatorRuntime {
   readonly definition: OperatorDefinition;
   readonly skill: SkillDefinition;
@@ -25,6 +27,7 @@ export class OperatorRuntime {
   private stunnedPosition:
     | { x: number; y: number }
     | null = null;
+  private targetTurnAngle: number | null = null;
   private buffs: Buff[] = [];
   private skillRangeDisplay: { rangeId: AttackRangeId; duration: number } | null =
     null;
@@ -66,7 +69,12 @@ export class OperatorRuntime {
   }
 
   get defense() {
-    return this.definition.defense * (this.definition.defenseMultiplier ?? 1);
+    const defenseBuff = this.buffs.find((buff) => buff.type === "defense");
+    return (
+      this.definition.defense *
+      (this.definition.defenseMultiplier ?? 1) *
+      (defenseBuff?.value ?? 1)
+    );
   }
 
   get resistance() {
@@ -75,6 +83,10 @@ export class OperatorRuntime {
 
   get physicalDodge() {
     return this.definition.physicalDodge ?? 0;
+  }
+
+  get damageBlockChance() {
+    return this.definition.damageBlockChance ?? 0;
   }
 
   get speed() {
@@ -341,12 +353,13 @@ export class OperatorRuntime {
     return this.currentHp - before;
   }
 
-  applySpeedToBody() {
+  applySpeedToBody(deltaSeconds = 1 / 60) {
     if (this.isStunned) {
       this.holdStunnedPosition();
       return;
     }
 
+    this.applySmoothTurn(deltaSeconds);
     const velocity = this.body.velocity;
     const length = Math.hypot(velocity.x, velocity.y) || 1;
     const target = this.speed / 60;
@@ -450,7 +463,7 @@ export class OperatorRuntime {
       Math.atan2(velocity.y, velocity.x) +
       ((Math.random() * 2 - 1) * maxDegrees * Math.PI) / 180;
 
-    this.setVelocityByDirection(Math.cos(angle), Math.sin(angle));
+    this.targetTurnAngle = normalizeAngle(angle);
   }
 
   private freezeMovement() {
@@ -465,6 +478,7 @@ export class OperatorRuntime {
       y: this.body.position.y,
     };
     Body.setVelocity(this.body, { x: 0, y: 0 });
+    this.targetTurnAngle = null;
   }
 
   private restoreMovement() {
@@ -482,6 +496,7 @@ export class OperatorRuntime {
     this.lastFacingAngle = Math.atan2(velocity.y, velocity.x);
     this.preservedVelocity = null;
     this.stunnedPosition = null;
+    this.targetTurnAngle = null;
   }
 
   private holdStunnedPosition() {
@@ -502,4 +517,41 @@ export class OperatorRuntime {
     });
     this.lastFacingAngle = Math.atan2(y, x);
   }
+
+  private applySmoothTurn(deltaSeconds: number) {
+    if (this.targetTurnAngle === null) {
+      return;
+    }
+
+    const velocity = this.body.velocity;
+    const length = Math.hypot(velocity.x, velocity.y);
+
+    if (length < 0.001) {
+      return;
+    }
+
+    const currentAngle = Math.atan2(velocity.y, velocity.x);
+    const difference = shortestAngleDifference(currentAngle, this.targetTurnAngle);
+    const maxStep = smoothTurnRadiansPerSecond * deltaSeconds;
+
+    if (Math.abs(difference) <= maxStep) {
+      this.setVelocityByDirection(
+        Math.cos(this.targetTurnAngle),
+        Math.sin(this.targetTurnAngle),
+      );
+      this.targetTurnAngle = null;
+      return;
+    }
+
+    const nextAngle = currentAngle + Math.sign(difference) * maxStep;
+    this.setVelocityByDirection(Math.cos(nextAngle), Math.sin(nextAngle));
+  }
+}
+
+function normalizeAngle(angle: number) {
+  return Math.atan2(Math.sin(angle), Math.cos(angle));
+}
+
+function shortestAngleDifference(from: number, to: number) {
+  return normalizeAngle(to - from);
 }

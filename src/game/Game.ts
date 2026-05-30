@@ -27,7 +27,9 @@ const collisionDamageRatio = 0.1;
 const fixedStepMs = 1000 / 60;
 const damageNumberDuration = 0.95;
 const battleCastDuration = 3;
+const maxBattleCastItems = 4;
 const projectileDuration = 0.26;
+const floatingPointEpsilon = 0.001;
 
 export class Game {
   private readonly ui: BattleUi;
@@ -47,10 +49,15 @@ export class Game {
   private rightSkillId = "sheathStrike";
   private damageNumbers: FloatingDamageSnapshot[] = [];
   private projectiles: ProjectileSnapshot[] = [];
-  private battleCast: { message: string; age: number; duration: number } | null =
-    null;
+  private battleCast: {
+    id: number;
+    message: string;
+    age: number;
+    duration: number;
+  }[] = [];
   private nextDamageNumberId = 1;
   private nextProjectileId = 1;
+  private nextBattleCastId = 1;
   private chenTalentTimers = { left: 0, right: 0 };
   private repeatedStrikes: ActiveRepeatedStrike[] = [];
   private setupDrag:
@@ -102,12 +109,12 @@ export class Game {
 
     this.ui.leftSkillSelect.addEventListener("change", () => {
       this.leftSkillId = this.ui.leftSkillSelect.value;
-      this.resetBattle();
+      this.resetBattle({ preserveSetup: true });
     });
 
     this.ui.rightSkillSelect.addEventListener("change", () => {
       this.rightSkillId = this.ui.rightSkillSelect.value;
-      this.resetBattle();
+      this.resetBattle({ preserveSetup: true });
     });
 
     for (const button of this.ui.speedButtons) {
@@ -134,7 +141,9 @@ export class Game {
     );
   }
 
-  private resetBattle() {
+  private resetBattle(options: { preserveSetup?: boolean } = {}) {
+    const preservedSetup = options.preserveSetup ? this.captureSetupState() : null;
+
     this.physics?.clear();
     this.running = false;
     this.winnerName = null;
@@ -144,9 +153,10 @@ export class Game {
     this.repeatedStrikes = [];
     this.damageNumbers = [];
     this.projectiles = [];
-    this.battleCast = null;
+    this.battleCast = [];
     this.nextDamageNumberId = 1;
     this.nextProjectileId = 1;
+    this.nextBattleCastId = 1;
     this.setupDrag = null;
 
     const leftDefinition = this.getOperator(this.leftId);
@@ -170,6 +180,7 @@ export class Game {
       this.physics.rightBody,
     );
 
+    this.restoreSetupState(preservedSetup);
     this.left.applySpeedToBody();
     this.right.applySpeedToBody();
     this.ui.pauseButton.textContent = "暂停";
@@ -229,6 +240,14 @@ export class Game {
       ];
     }
 
+    if (operatorId === "hoshiguma") {
+      return [
+        skills.hoshigumaWarpath,
+        skills.hoshigumaThorns,
+        skills.hoshigumaSaw,
+      ];
+    }
+
     const operator = this.getOperator(operatorId);
     return [this.getSkill(operator.skillId)];
   }
@@ -251,6 +270,47 @@ export class Game {
       this.leftSkillId,
       this.rightSkillId,
     );
+  }
+
+  private captureSetupState(): SetupState | null {
+    if (!this.left || !this.right || this.running || this.elapsed > 0) {
+      return null;
+    }
+
+    return {
+      left: this.captureOperatorSetup(this.left),
+      right: this.captureOperatorSetup(this.right),
+    };
+  }
+
+  private captureOperatorSetup(operator: OperatorRuntime): OperatorSetupState {
+    return {
+      operatorId: operator.definition.id,
+      x: operator.body.position.x,
+      y: operator.body.position.y,
+      facingAngle: this.getFacingAngle(operator),
+    };
+  }
+
+  private restoreSetupState(state: SetupState | null) {
+    if (!state || !this.left || !this.right) {
+      return;
+    }
+
+    this.restoreOperatorSetup(this.left, state.left);
+    this.restoreOperatorSetup(this.right, state.right);
+  }
+
+  private restoreOperatorSetup(
+    operator: OperatorRuntime,
+    state: OperatorSetupState,
+  ) {
+    if (operator.definition.id !== state.operatorId) {
+      return;
+    }
+
+    operator.setPosition(state.x, state.y);
+    operator.setFacingAngle(state.facingAngle);
   }
 
   private loop = (time: number) => {
@@ -298,8 +358,8 @@ export class Game {
     this.updateBasicAttack(this.right, this.left, deltaSeconds);
     this.left.updateDrift(deltaSeconds);
     this.right.updateDrift(deltaSeconds);
-    this.left.applySpeedToBody();
-    this.right.applySpeedToBody();
+    this.left.applySpeedToBody(deltaSeconds);
+    this.right.applySpeedToBody(deltaSeconds);
 
     Engine.update(this.physics.engine, fixedStepMs * this.speedMultiplier);
     this.left.keepInsideArena(arenaSize);
@@ -336,12 +396,8 @@ export class Game {
 
   private updateBattleCast(deltaSeconds: number) {
     this.battleCast = this.battleCast
-      ? { ...this.battleCast, age: this.battleCast.age + deltaSeconds }
-      : null;
-
-    if (this.battleCast && this.battleCast.age >= this.battleCast.duration) {
-      this.battleCast = null;
-    }
+      .map((cast) => ({ ...cast, age: cast.age + deltaSeconds }))
+      .filter((cast) => cast.age < cast.duration);
   }
 
   private tryActivateSkill(
@@ -350,7 +406,13 @@ export class Game {
   ) {
     const spCost = self.skill.spCost ?? self.skill.maxSp;
 
-    if (!self.isAlive || !enemy.isAlive || self.isSkillActive || self.currentSp < spCost) {
+    if (
+      !self.isAlive ||
+      !enemy.isAlive ||
+      self.skill.passive ||
+      self.isSkillActive ||
+      self.currentSp < spCost
+    ) {
       return;
     }
 
@@ -427,10 +489,9 @@ export class Game {
 
       while (this.chenTalentTimers[key] >= 4) {
         this.chenTalentTimers[key] -= 4;
-        const previousSp = operator.currentSp;
-        operator.gainSp(1);
+        const gained = this.gainTalentSp(operator, 1);
 
-        if (operator.currentSp > previousSp) {
+        if (gained > 0) {
           this.addBattleLog(
             `${operator.definition.name} 的天赋为自身回复 1 点技力`,
           );
@@ -685,13 +746,58 @@ export class Game {
     rawAmount: number,
     type: DamageType,
   ) {
-    const dealt = defender.takeAttack(rawAmount, type);
+    const wasDefenderAlive = defender.isAlive;
+    const dealt = this.resolveAttackDamage(attacker, defender, rawAmount, type);
 
     if (dealt > 0) {
       this.spawnDamageNumber(attacker, defender, dealt);
+      this.applyAmiyaDamageTalent(attacker, defender, wasDefenderAlive);
+      this.applyHoshigumaThorns(defender, attacker);
     }
 
     return dealt;
+  }
+
+  private resolveAttackDamage(
+    attacker: OperatorRuntimeLike,
+    defender: OperatorRuntimeLike,
+    rawAmount: number,
+    type: DamageType,
+  ) {
+    if (this.tryBlockDamage(defender, type)) {
+      this.addBattleLog(`${defender.definition.name} 抵挡了 ${attacker.definition.name} 的伤害`);
+      return 0;
+    }
+
+    return defender.takeAttack(rawAmount, type);
+  }
+
+  private applyAmiyaDamageTalent(
+    attacker: OperatorRuntimeLike,
+    defender: OperatorRuntimeLike,
+    wasDefenderAlive: boolean,
+  ) {
+    if (attacker.definition.id !== "amiya") {
+      return;
+    }
+
+    this.gainTalentSp(attacker, 2);
+
+    if (wasDefenderAlive && !defender.isAlive) {
+      this.gainTalentSp(attacker, 8);
+    }
+  }
+
+  private gainTalentSp(operator: OperatorRuntimeLike, amount: number) {
+    const previousSp = operator.currentSp;
+    operator.gainSp(amount);
+    const gained = operator.currentSp - previousSp;
+
+    if (gained > floatingPointEpsilon) {
+      this.spawnSpNumber(operator, Math.max(1, Math.round(gained)));
+    }
+
+    return gained;
   }
 
   private dealCollisionDamage(
@@ -699,13 +805,59 @@ export class Game {
     defender: OperatorRuntime,
     rawAmount: number,
   ) {
-    const dealt = defender.takeDamage(rawAmount, attacker.damageType);
+    const dealt = this.resolveDirectDamage(attacker, defender, rawAmount, attacker.damageType);
 
     if (dealt > 0) {
       this.spawnDamageNumber(attacker, defender, dealt);
+      this.applyHoshigumaThorns(defender, attacker);
     }
 
     return dealt;
+  }
+
+  private resolveDirectDamage(
+    attacker: OperatorRuntimeLike,
+    defender: OperatorRuntimeLike,
+    rawAmount: number,
+    type: DamageType,
+  ) {
+    if (this.tryBlockDamage(defender, type)) {
+      this.addBattleLog(`${defender.definition.name} 抵挡了 ${attacker.definition.name} 的伤害`);
+      return 0;
+    }
+
+    return defender.takeDamage(rawAmount, type);
+  }
+
+  private tryBlockDamage(defender: OperatorRuntimeLike, type: DamageType) {
+    return (
+      type !== "true" &&
+      defender.damageBlockChance > 0 &&
+      Math.random() < defender.damageBlockChance
+    );
+  }
+
+  private applyHoshigumaThorns(
+    defender: OperatorRuntimeLike,
+    attacker: OperatorRuntimeLike,
+  ) {
+    if (
+      defender.definition.id !== "hoshiguma" ||
+      defender.skill.id !== "hoshigumaThorns" ||
+      !defender.isAlive ||
+      !attacker.isAlive
+    ) {
+      return;
+    }
+
+    const reflected = attacker.takeAttack(defender.attack * 0.8, "physical");
+
+    if (reflected > 0) {
+      this.spawnDamageNumber(defender, attacker, reflected);
+      this.addBattleLog(
+        `${defender.definition.name} 的荆棘反伤，造成 ${reflected} 点物理伤害`,
+      );
+    }
   }
 
   private healOperator(
@@ -755,9 +907,23 @@ export class Game {
 
     this.damageNumbers.push({
       id: this.nextDamageNumberId,
+      kind: "damage",
       amount,
       x: defender.body.position.x + (directionX / length) * 8,
       y: defender.body.position.y - defender.definition.radius - 10 + (directionY / length) * 8,
+      age: 0,
+      duration: damageNumberDuration,
+    });
+    this.nextDamageNumberId += 1;
+  }
+
+  private spawnSpNumber(operator: OperatorRuntimeLike, amount: number) {
+    this.damageNumbers.push({
+      id: this.nextDamageNumberId,
+      kind: "sp",
+      amount,
+      x: operator.body.position.x,
+      y: operator.body.position.y - operator.definition.radius - 18,
       age: 0,
       duration: damageNumberDuration,
     });
@@ -890,11 +1056,14 @@ export class Game {
 
   private addBattleLog(message: string) {
     this.ui.addLog(message);
-    this.battleCast = {
+    this.battleCast.unshift({
+      id: this.nextBattleCastId,
       message,
       age: 0,
       duration: battleCastDuration,
-    };
+    });
+    this.nextBattleCastId += 1;
+    this.battleCast = this.battleCast.slice(0, maxBattleCastItems);
   }
 
   private handleCanvasPointerDown(event: PointerEvent) {
@@ -1057,4 +1226,16 @@ interface ActiveRepeatedStrike {
   remainingHits: number;
   timer: number;
   totalDamage: number;
+}
+
+interface OperatorSetupState {
+  operatorId: string;
+  x: number;
+  y: number;
+  facingAngle: number;
+}
+
+interface SetupState {
+  left: OperatorSetupState;
+  right: OperatorSetupState;
 }

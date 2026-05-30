@@ -1,5 +1,6 @@
 import { roleLabels } from "../game/operators";
 import type {
+  BattleCastSnapshot,
   BattleUi,
   OperatorDefinition,
   OperatorSnapshot,
@@ -124,8 +125,12 @@ function fillSkillSelect(
 
 function renderStatusCard(operator: OperatorSnapshot) {
   const hpRatio = toPercent(operator.hp / operator.maxHp);
-  const spRatio = toPercent(operator.sp / operator.maxSp);
+  const hasSpBar = operator.maxSp > 0;
+  const spRatio = hasSpBar ? toPercent(operator.sp / operator.maxSp) : 100;
   const spClassName = operator.isSkillActive ? "sp-fill active-sp-fill" : "sp-fill";
+  const spText = hasSpBar
+    ? `${Math.floor(operator.sp)} / ${operator.maxSp}`
+    : "被动";
 
   return `
     <article class="operator-card">
@@ -146,7 +151,7 @@ function renderStatusCard(operator: OperatorSnapshot) {
         <div class="bar-row">
           <div class="bar-meta">
             <span>SP</span>
-            <span>${Math.floor(operator.sp)} / ${operator.maxSp}</span>
+            <span>${spText}</span>
           </div>
           <div class="bar-track">
             <div class="bar-fill ${spClassName}" style="width: ${spRatio}%"></div>
@@ -182,28 +187,35 @@ function toPercent(ratio: number) {
 
 function updateBattleCast(
   element: HTMLDivElement,
-  cast: { message: string; age: number; duration: number } | null,
+  casts: BattleCastSnapshot[],
 ) {
-  element.hidden = !cast;
+  element.hidden = casts.length === 0;
 
-  if (!cast) {
-    element.textContent = "";
+  if (casts.length === 0) {
+    element.replaceChildren();
     element.style.opacity = "0";
-    element.style.transform = "translate(-50%, 10px)";
     return;
   }
 
-  const fadeStart = cast.duration * 0.62;
-  const fadeProgress =
-    cast.age <= fadeStart
-      ? 0
-      : (cast.age - fadeStart) / Math.max(0.001, cast.duration - fadeStart);
-  const opacity = Math.max(0, 1 - fadeProgress);
-  const offsetY = -18 * fadeProgress;
+  element.style.opacity = "1";
+  element.replaceChildren(
+    ...casts.map((cast, index) => {
+      const item = document.createElement("div");
+      const fadeStart = cast.duration * 0.62;
+      const fadeProgress =
+        cast.age <= fadeStart
+          ? 0
+          : (cast.age - fadeStart) / Math.max(0.001, cast.duration - fadeStart);
+      const opacity = Math.max(0, 1 - fadeProgress);
+      const offsetY = -12 * fadeProgress;
 
-  element.textContent = cast.message;
-  element.style.opacity = opacity.toFixed(3);
-  element.style.transform = `translate(-50%, ${offsetY}px)`;
+      item.className = "battle-cast-item";
+      item.textContent = cast.message;
+      item.style.opacity = opacity.toFixed(3);
+      item.style.transform = `translateY(${offsetY - index * 2}px)`;
+      return item;
+    }),
+  );
 }
 
 function formatElapsed(elapsed: number) {

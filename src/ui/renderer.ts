@@ -154,10 +154,20 @@ function drawDamageNumbers(
     const alpha = 1 - progress;
 
     ctx.globalAlpha = Math.max(0, alpha);
-    ctx.strokeStyle = "rgb(82 0 0)";
-    ctx.fillStyle = "#ff3b30";
-    ctx.strokeText(`-${number.amount}`, number.x, y);
-    ctx.fillText(`-${number.amount}`, number.x, y);
+
+    if (number.kind === "sp") {
+      const amount = Math.max(1, Math.round(number.amount));
+
+      ctx.strokeStyle = "rgb(0 28 82)";
+      ctx.fillStyle = "#55b7ff";
+      ctx.strokeText(`SP+${amount}`, number.x, y);
+      ctx.fillText(`SP+${amount}`, number.x, y);
+    } else {
+      ctx.strokeStyle = "rgb(82 0 0)";
+      ctx.fillStyle = "#ff3b30";
+      ctx.strokeText(`-${number.amount}`, number.x, y);
+      ctx.fillText(`-${number.amount}`, number.x, y);
+    }
   }
 
   ctx.restore();
@@ -217,7 +227,7 @@ function drawMiniBars(
   const x = -width / 2;
   const y = operator.radius + 12;
   const hpRatio = operator.hp / operator.maxHp;
-  const spRatio = operator.sp / operator.maxSp;
+  const spRatio = operator.maxSp > 0 ? operator.sp / operator.maxSp : 1;
 
   ctx.fillStyle = "#070a0f";
   ctx.fillRect(x, y, width, 6);
