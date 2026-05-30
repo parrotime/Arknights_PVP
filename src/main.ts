@@ -31,9 +31,13 @@ app.innerHTML = `
         </div>
         <div class="status-panel" id="left-status"></div>
       </aside>
-      <div class="arena-wrap">
-        <canvas id="arena" width="720" height="720"></canvas>
-        <div class="result-banner" id="result-banner" hidden></div>
+      <div class="arena-stack">
+        <div class="battle-timer" id="battle-timer">0:00</div>
+        <div class="arena-wrap">
+          <canvas id="arena" width="648" height="648"></canvas>
+          <div class="battle-cast" id="battle-cast" hidden></div>
+          <div class="result-banner" id="result-banner" hidden></div>
+        </div>
       </div>
       <aside class="side-panel side-panel-red">
         <div class="match-selectors">

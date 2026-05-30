@@ -1,7 +1,7 @@
 import type { BattleSnapshot, OperatorSnapshot } from "../game/types";
 import { displayCellsByRange, getRangeCellCenter } from "../game/ranges";
 
-const arenaSize = 720;
+const arenaSize = 648;
 
 export function renderArena(
   canvas: HTMLCanvasElement,
@@ -17,10 +17,10 @@ export function renderArena(
   drawArenaBackground(ctx);
   drawAttackRange(ctx, snapshot.left);
   drawAttackRange(ctx, snapshot.right);
+  drawProjectiles(ctx, snapshot);
   drawOperator(ctx, snapshot.left);
   drawOperator(ctx, snapshot.right);
   drawDamageNumbers(ctx, snapshot);
-  drawCenterInfo(ctx, snapshot);
 }
 
 function drawArenaBackground(ctx: CanvasRenderingContext2D) {
@@ -163,6 +163,52 @@ function drawDamageNumbers(
   ctx.restore();
 }
 
+function drawProjectiles(
+  ctx: CanvasRenderingContext2D,
+  snapshot: BattleSnapshot,
+) {
+  ctx.save();
+  ctx.lineCap = "round";
+
+  for (const projectile of snapshot.projectiles) {
+    const progress = Math.max(
+      0,
+      Math.min(1, projectile.age / projectile.duration),
+    );
+    const eased = 1 - (1 - progress) * (1 - progress);
+    const x =
+      projectile.fromX + (projectile.toX - projectile.fromX) * eased;
+    const y =
+      projectile.fromY + (projectile.toY - projectile.fromY) * eased;
+    const angle = Math.atan2(
+      projectile.toY - projectile.fromY,
+      projectile.toX - projectile.fromX,
+    );
+    const alpha = Math.min(1, (1 - progress) * 1.35);
+    const color =
+      projectile.damageType === "arts"
+        ? "103 210 255"
+        : projectile.damageType === "true"
+          ? "255 245 196"
+          : "255 205 92";
+
+    ctx.globalAlpha = alpha;
+    ctx.strokeStyle = `rgb(${color} / 0.3)`;
+    ctx.lineWidth = 9;
+    ctx.beginPath();
+    ctx.moveTo(x - Math.cos(angle) * 20, y - Math.sin(angle) * 20);
+    ctx.lineTo(x, y);
+    ctx.stroke();
+
+    ctx.fillStyle = `rgb(${color})`;
+    ctx.beginPath();
+    ctx.arc(x, y, 5.5, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  ctx.restore();
+}
+
 function drawMiniBars(
   ctx: CanvasRenderingContext2D,
   operator: OperatorSnapshot,
@@ -180,24 +226,6 @@ function drawMiniBars(
 
   ctx.fillStyle = "#070a0f";
   ctx.fillRect(x, y + 8, width, 5);
-  ctx.fillStyle = "#65e874";
+  ctx.fillStyle = operator.isSkillActive ? "#0d6f35" : "#65e874";
   ctx.fillRect(x, y + 8, width * spRatio, 5);
-}
-
-function drawCenterInfo(
-  ctx: CanvasRenderingContext2D,
-  snapshot: BattleSnapshot,
-) {
-  const minutes = Math.floor(snapshot.elapsed / 60);
-  const seconds = Math.floor(snapshot.elapsed % 60)
-    .toString()
-    .padStart(2, "0");
-
-  ctx.fillStyle = "rgb(8 12 18 / 0.6)";
-  ctx.fillRect(arenaSize / 2 - 54, 14, 108, 34);
-  ctx.fillStyle = "#e8f2ff";
-  ctx.font = "800 18px Inter, sans-serif";
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.fillText(`${minutes}:${seconds}`, arenaSize / 2, 31);
 }

@@ -16,6 +16,8 @@ export function createBattleUi(): BattleUi {
   const pauseButton = getElement<HTMLButtonElement>("pause-button");
   const restartButton = getElement<HTMLButtonElement>("restart-button");
   const resultBanner = getElement<HTMLDivElement>("result-banner");
+  const timer = getElement<HTMLDivElement>("battle-timer");
+  const battleCast = getElement<HTMLDivElement>("battle-cast");
   const leftStatus = getElement<HTMLElement>("left-status");
   const rightStatus = getElement<HTMLElement>("right-status");
   const battleLog = getElement<HTMLOListElement>("battle-log");
@@ -34,6 +36,8 @@ export function createBattleUi(): BattleUi {
     restartButton,
     speedButtons,
     resultBanner,
+    timer,
+    battleCast,
     setOperatorOptions: (operators, leftId, rightId) => {
       fillSelect(leftSelect, operators, leftId);
       fillSelect(rightSelect, operators, rightId);
@@ -46,6 +50,8 @@ export function createBattleUi(): BattleUi {
       leftStatus.innerHTML = renderStatusCard(snapshot.left);
       rightStatus.innerHTML = renderStatusCard(snapshot.right);
       resultBanner.hidden = !snapshot.winnerName;
+      timer.textContent = formatElapsed(snapshot.elapsed);
+      updateBattleCast(battleCast, snapshot.battleCast);
       resultBanner.textContent = snapshot.winnerName
         ? snapshot.winnerName === "平局"
           ? "平局"
@@ -119,6 +125,7 @@ function fillSkillSelect(
 function renderStatusCard(operator: OperatorSnapshot) {
   const hpRatio = toPercent(operator.hp / operator.maxHp);
   const spRatio = toPercent(operator.sp / operator.maxSp);
+  const spClassName = operator.isSkillActive ? "sp-fill active-sp-fill" : "sp-fill";
 
   return `
     <article class="operator-card">
@@ -142,7 +149,7 @@ function renderStatusCard(operator: OperatorSnapshot) {
             <span>${Math.floor(operator.sp)} / ${operator.maxSp}</span>
           </div>
           <div class="bar-track">
-            <div class="bar-fill sp-fill" style="width: ${spRatio}%"></div>
+            <div class="bar-fill ${spClassName}" style="width: ${spRatio}%"></div>
           </div>
         </div>
       </div>
@@ -171,4 +178,39 @@ function renderStatusCard(operator: OperatorSnapshot) {
 
 function toPercent(ratio: number) {
   return Math.max(0, Math.min(100, ratio * 100));
+}
+
+function updateBattleCast(
+  element: HTMLDivElement,
+  cast: { message: string; age: number; duration: number } | null,
+) {
+  element.hidden = !cast;
+
+  if (!cast) {
+    element.textContent = "";
+    element.style.opacity = "0";
+    element.style.transform = "translate(-50%, 10px)";
+    return;
+  }
+
+  const fadeStart = cast.duration * 0.62;
+  const fadeProgress =
+    cast.age <= fadeStart
+      ? 0
+      : (cast.age - fadeStart) / Math.max(0.001, cast.duration - fadeStart);
+  const opacity = Math.max(0, 1 - fadeProgress);
+  const offsetY = -18 * fadeProgress;
+
+  element.textContent = cast.message;
+  element.style.opacity = opacity.toFixed(3);
+  element.style.transform = `translate(-50%, ${offsetY}px)`;
+}
+
+function formatElapsed(elapsed: number) {
+  const minutes = Math.floor(elapsed / 60);
+  const seconds = Math.floor(elapsed % 60)
+    .toString()
+    .padStart(2, "0");
+
+  return `${minutes}:${seconds}`;
 }

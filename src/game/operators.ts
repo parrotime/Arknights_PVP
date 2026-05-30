@@ -22,7 +22,9 @@ export const operators: OperatorDefinition[] = [
   {
     id: "amiya",
     name: "阿米娅",
+    englishName: "Amiya",
     role: "caster",
+    attackMode: "ranged",
     maxHp: 1480,
     attack: 612,
     defense: 121,
@@ -40,7 +42,9 @@ export const operators: OperatorDefinition[] = [
   {
     id: "chen",
     name: "陈",
+    englishName: "Chen",
     role: "guard",
+    attackMode: "melee",
     maxHp: 28800,
     attack: 610,
     defense: 352,
@@ -62,6 +66,7 @@ export const operators: OperatorDefinition[] = [
     id: "hoshiguma",
     name: "星熊",
     role: "defender",
+    attackMode: "melee",
     maxHp: 2050,
     attack: 76,
     defense: 62,
@@ -79,25 +84,31 @@ export const operators: OperatorDefinition[] = [
   {
     id: "exusiai",
     name: "能天使",
+    englishName: "Exusiai",
     role: "sniper",
-    maxHp: 1040,
-    attack: 82,
-    defense: 16,
+    attackMode: "ranged",
+    maxHp: 16730,
+    attack: 540,
+    defense: 161,
     resistance: 0,
     damageType: "physical",
     attackInterval: 1,
-    attackRangeId: "forwardWide",
-    rangeTileSize: 66,
+    attackRangeId: "exusiaiDefault",
+    rangeTileSize: 56,
     radius: 27,
     speed: 212,
-    spRegen: 22,
+    spRegen: 1,
     spRecoveryType: "natural",
-    skillId: "overload",
+    attackSpeedBonus: 12,
+    attackMultiplier: 1.06,
+    maxHpMultiplier: 1.1,
+    skillId: "exusiaiOverloadMode",
   },
   {
     id: "saria",
     name: "塞雷娅",
     role: "medic",
+    attackMode: "melee",
     maxHp: 1760,
     attack: 70,
     defense: 52,
@@ -116,6 +127,7 @@ export const operators: OperatorDefinition[] = [
     id: "phantom",
     name: "傀影",
     role: "specialist",
+    attackMode: "melee",
     maxHp: 1260,
     attack: 91,
     defense: 24,
@@ -133,7 +145,7 @@ export const operators: OperatorDefinition[] = [
 ];
 
 for (const operator of operators) {
-  if (operator.id !== "chen") {
+  if (operator.id !== "chen" && operator.id !== "exusiai") {
     operator.maxHp *= 10;
   }
 }

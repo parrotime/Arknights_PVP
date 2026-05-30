@@ -10,6 +10,7 @@ export type OperatorRole =
 
 export type DamageType = "physical" | "arts" | "true";
 export type SpRecoveryType = "natural" | "attack";
+export type AttackMode = "melee" | "ranged";
 
 export type AttackRangeId =
   | "amiyaDefault"
@@ -17,6 +18,7 @@ export type AttackRangeId =
   | "chenDefault"
   | "chenSkill2"
   | "chenSkill3"
+  | "exusiaiDefault"
   | "forwardShort"
   | "forwardWide";
 
@@ -24,6 +26,7 @@ export type BuffType =
   | "speed"
   | "damageReduction"
   | "attack"
+  | "attackSpeed"
   | "attackInterval"
   | "maxHp"
   | "rangeOverride"
@@ -40,13 +43,16 @@ export interface Buff {
   rangeId?: AttackRangeId;
   damageType?: DamageType;
   hits?: number;
+  consumeOnAttack?: boolean;
   stunAfterExpire?: number;
 }
 
 export interface OperatorDefinition {
   id: string;
   name: string;
+  englishName?: string;
   role: OperatorRole;
+  attackMode: AttackMode;
   maxHp: number;
   attack: number;
   defense: number;
@@ -59,7 +65,9 @@ export interface OperatorDefinition {
   speed: number;
   spRegen: number;
   spRecoveryType: SpRecoveryType;
+  attackSpeedBonus?: number;
   attackMultiplier?: number;
+  maxHpMultiplier?: number;
   defenseMultiplier?: number;
   physicalDodge?: number;
   skillId: string;
@@ -98,6 +106,8 @@ export interface SkillDefinition {
   duration?: number;
   skillRangeId?: AttackRangeId;
   minimumRangeDisplayDuration?: number;
+  spRecoveryType?: SpRecoveryType;
+  autoActivate?: boolean;
   activate: (ctx: SkillContext) => void;
 }
 
@@ -120,8 +130,9 @@ export interface OperatorRuntimeLike {
   rangeTileSize: number;
   isStunned: boolean;
   isSkillActive: boolean;
-  multiHit: { hits: number; multiplier: number } | null;
+  multiHit: { hits: number; multiplier: number; consumeOnAttack: boolean } | null;
   addBuff: (buff: Buff) => void;
+  removeBuff: (type: BuffType) => void;
   showSkillRange: (rangeId: AttackRangeId, duration: number) => void;
   startSkillCooldown: (duration: number) => void;
   gainSp: (amount: number) => void;
@@ -134,7 +145,9 @@ export interface OperatorRuntimeLike {
 export interface OperatorSnapshot {
   id: string;
   name: string;
+  englishName?: string;
   role: OperatorRole;
+  attackMode: AttackMode;
   hp: number;
   maxHp: number;
   sp: number;
@@ -151,10 +164,17 @@ export interface OperatorSnapshot {
   isAlive: boolean;
   hasShield: boolean;
   isStunned: boolean;
+  isSkillActive: boolean;
   facingAngle: number;
   attackRangeId: AttackRangeId;
   displayRangeId: AttackRangeId;
   rangeTileSize: number;
+}
+
+export interface BattleCastSnapshot {
+  message: string;
+  age: number;
+  duration: number;
 }
 
 export interface FloatingDamageSnapshot {
@@ -166,10 +186,23 @@ export interface FloatingDamageSnapshot {
   duration: number;
 }
 
+export interface ProjectileSnapshot {
+  id: number;
+  fromX: number;
+  fromY: number;
+  toX: number;
+  toY: number;
+  age: number;
+  duration: number;
+  damageType: DamageType;
+}
+
 export interface BattleSnapshot {
   left: OperatorSnapshot;
   right: OperatorSnapshot;
   damageNumbers: FloatingDamageSnapshot[];
+  projectiles: ProjectileSnapshot[];
+  battleCast: BattleCastSnapshot | null;
   elapsed: number;
   running: boolean;
   winnerName: string | null;
@@ -186,6 +219,8 @@ export interface BattleUi {
   restartButton: HTMLButtonElement;
   speedButtons: HTMLButtonElement[];
   resultBanner: HTMLDivElement;
+  timer: HTMLDivElement;
+  battleCast: HTMLDivElement;
   updateStatus: (snapshot: BattleSnapshot) => void;
   setOperatorOptions: (
     operators: OperatorDefinition[],

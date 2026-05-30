@@ -14,6 +14,7 @@ export class OperatorRuntime {
   currentHp: number;
   currentSp = 0;
   attackTimer = 0;
+  manualFacingAngle: number | null = null;
   private buffs: Buff[] = [];
   private skillRangeDisplay: { rangeId: AttackRangeId; duration: number } | null =
     null;
@@ -46,7 +47,11 @@ export class OperatorRuntime {
 
   get maxHp() {
     const maxHpBuff = this.buffs.find((buff) => buff.type === "maxHp");
-    return Math.round(this.definition.maxHp * (maxHpBuff?.value ?? 1));
+    return Math.round(
+      this.definition.maxHp *
+        (this.definition.maxHpMultiplier ?? 1) *
+        (maxHpBuff?.value ?? 1),
+    );
   }
 
   get defense() {
@@ -77,7 +82,16 @@ export class OperatorRuntime {
     const intervalBuff = this.buffs.find(
       (buff) => buff.type === "attackInterval",
     );
-    return this.definition.attackInterval * (intervalBuff?.value ?? 1);
+    const speedBuff = this.buffs.find((buff) => buff.type === "attackSpeed");
+    const attackSpeed =
+      100 +
+      (this.definition.attackSpeedBonus ?? 0) +
+      (speedBuff?.value ?? 0);
+
+    return (
+      (this.definition.attackInterval * (intervalBuff?.value ?? 1) * 100) /
+      attackSpeed
+    );
   }
 
   get attackRangeId() {
@@ -122,6 +136,7 @@ export class OperatorRuntime {
     return {
       hits: buff.hits,
       multiplier: buff.value,
+      consumeOnAttack: Boolean(buff.consumeOnAttack),
     };
   }
 
@@ -212,6 +227,12 @@ export class OperatorRuntime {
     this.scaleHpForMaxHpChange(previousMaxHp);
   }
 
+  removeBuff(type: Buff["type"]) {
+    const previousMaxHp = this.maxHp;
+    this.buffs = this.buffs.filter((buff) => buff.type !== type);
+    this.scaleHpForMaxHpChange(previousMaxHp);
+  }
+
   showSkillRange(rangeId: AttackRangeId, duration: number) {
     this.skillRangeDisplay = {
       rangeId,
@@ -290,6 +311,20 @@ export class OperatorRuntime {
     Body.setVelocity(this.body, {
       x: (velocity.x / length) * target,
       y: (velocity.y / length) * target,
+    });
+  }
+
+  setPosition(x: number, y: number) {
+    Body.setPosition(this.body, { x, y });
+  }
+
+  setFacingAngle(angle: number) {
+    this.manualFacingAngle = angle;
+    const target = this.speed / 60;
+
+    Body.setVelocity(this.body, {
+      x: Math.cos(angle) * target,
+      y: Math.sin(angle) * target,
     });
   }
 

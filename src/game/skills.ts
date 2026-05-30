@@ -120,6 +120,71 @@ export const skills: Record<string, SkillDefinition> = {
     },
   },
 
+  exusiaiChargeMode: {
+    id: "exusiaiChargeMode",
+    name: "冲锋模式",
+    description: "下次攻击变为 3 连射，每次造成 121% 物理伤害",
+    initialSp: 0,
+    maxSp: 4,
+    spRecoveryType: "attack",
+    minimumRangeDisplayDuration: 1,
+    activate: ({ self, log }) => {
+      self.addBuff({
+        type: "multiHit",
+        value: 1.21,
+        hits: 3,
+        duration: Math.max(0.2, self.attackInterval + 0.05),
+        consumeOnAttack: true,
+      });
+      log(`${self.definition.name} 启动冲锋模式，下次攻击变为 3 连射`);
+    },
+  },
+
+  exusiaiSweepingMode: {
+    id: "exusiaiSweepingMode",
+    name: "扫射模式",
+    description: "15 秒内攻击变为 4 连射，每次造成 110% 物理伤害",
+    initialSp: 18,
+    maxSp: 39,
+    duration: 15,
+    spRecoveryType: "natural",
+    activate: ({ self, log }) => {
+      self.addBuff({
+        type: "multiHit",
+        value: 1.1,
+        hits: 4,
+        duration: 15,
+      });
+      log(`${self.definition.name} 开启扫射模式，攻击变为 4 连射`);
+    },
+  },
+
+  exusiaiOverloadMode: {
+    id: "exusiaiOverloadMode",
+    name: "过载模式",
+    description: "15 秒内攻击变为 5 连射，攻击间隔缩短 0.16 秒",
+    initialSp: 20,
+    maxSp: 38,
+    duration: 15,
+    spRecoveryType: "natural",
+    autoActivate: true,
+    activate: ({ self, log }) => {
+      self.addBuff({
+        type: "multiHit",
+        value: 1,
+        hits: 5,
+        duration: 15,
+      });
+      self.addBuff({
+        type: "attackInterval",
+        value: Math.max(0.1, self.definition.attackInterval - 0.16) /
+          self.definition.attackInterval,
+        duration: 15,
+      });
+      log(`${self.definition.name} 自动开启过载模式，攻击变为 5 连射`);
+    },
+  },
+
   ironWall: {
     id: "ironWall",
     name: "力之锯",
