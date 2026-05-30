@@ -34,24 +34,29 @@ export const operators: OperatorDefinition[] = [
     radius: 30,
     speed: 176,
     spRegen: 1,
+    spRecoveryType: "natural",
     skillId: "chimera",
   },
   {
     id: "chen",
     name: "陈",
     role: "guard",
-    maxHp: 1480,
-    attack: 118,
-    defense: 34,
+    maxHp: 28800,
+    attack: 610,
+    defense: 352,
     resistance: 0,
     damageType: "physical",
     attackInterval: 1.3,
-    attackRangeId: "forwardShort",
+    attackRangeId: "chenDefault",
     rangeTileSize: 64,
     radius: 31,
     speed: 188,
-    spRegen: 14,
-    skillId: "chiXiao",
+    spRegen: 0,
+    spRecoveryType: "attack",
+    attackMultiplier: 1.05,
+    defenseMultiplier: 1.05,
+    physicalDodge: 0.1,
+    skillId: "sheathStrike",
   },
   {
     id: "hoshiguma",
@@ -68,6 +73,7 @@ export const operators: OperatorDefinition[] = [
     radius: 34,
     speed: 142,
     spRegen: 12,
+    spRecoveryType: "natural",
     skillId: "ironWall",
   },
   {
@@ -85,6 +91,7 @@ export const operators: OperatorDefinition[] = [
     radius: 27,
     speed: 212,
     spRegen: 22,
+    spRecoveryType: "natural",
     skillId: "overload",
   },
   {
@@ -102,6 +109,7 @@ export const operators: OperatorDefinition[] = [
     radius: 33,
     speed: 150,
     spRegen: 15,
+    spRecoveryType: "natural",
     skillId: "firstAid",
   },
   {
@@ -119,10 +127,13 @@ export const operators: OperatorDefinition[] = [
     radius: 28,
     speed: 238,
     spRegen: 20,
+    spRecoveryType: "natural",
     skillId: "shadowPush",
   },
 ];
 
 for (const operator of operators) {
-  operator.maxHp *= 10;
+  if (operator.id !== "chen") {
+    operator.maxHp *= 10;
+  }
 }

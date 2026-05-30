@@ -9,6 +9,12 @@ import {
 import type { OperatorDefinition } from "./types";
 
 const wallThickness = 80;
+const wallPhysics = {
+  isStatic: true,
+  restitution: 1,
+  friction: 0,
+  frictionStatic: 0,
+};
 
 export interface PhysicsWorld {
   engine: Engine;
@@ -45,19 +51,19 @@ export function createPhysicsWorld(
 
   const walls = [
     Bodies.rectangle(half, -wallThickness / 2, size, wallThickness, {
-      isStatic: true,
+      ...wallPhysics,
       label: "wall:top",
     }),
     Bodies.rectangle(half, size + wallThickness / 2, size, wallThickness, {
-      isStatic: true,
+      ...wallPhysics,
       label: "wall:bottom",
     }),
     Bodies.rectangle(-wallThickness / 2, half, wallThickness, size, {
-      isStatic: true,
+      ...wallPhysics,
       label: "wall:left",
     }),
     Bodies.rectangle(size + wallThickness / 2, half, wallThickness, size, {
-      isStatic: true,
+      ...wallPhysics,
       label: "wall:right",
     }),
   ];

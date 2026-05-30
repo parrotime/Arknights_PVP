@@ -1,5 +1,6 @@
 import { Body } from "matter-js";
 import type {
+  AttackRangeId,
   Buff,
   DamageType,
   OperatorDefinition,
@@ -14,6 +15,8 @@ export class OperatorRuntime {
   currentSp = 0;
   attackTimer = 0;
   private buffs: Buff[] = [];
+  private skillRangeDisplay: { rangeId: AttackRangeId; duration: number } | null =
+    null;
 
   constructor(
     definition: OperatorDefinition,
@@ -33,7 +36,11 @@ export class OperatorRuntime {
 
   get attack() {
     const attackBuff = this.buffs.find((buff) => buff.type === "attack");
-    return this.definition.attack * (attackBuff?.value ?? 1);
+    return (
+      this.definition.attack *
+      (this.definition.attackMultiplier ?? 1) *
+      (attackBuff?.value ?? 1)
+    );
   }
 
   get maxHp() {
@@ -42,11 +49,15 @@ export class OperatorRuntime {
   }
 
   get defense() {
-    return this.definition.defense;
+    return this.definition.defense * (this.definition.defenseMultiplier ?? 1);
   }
 
   get resistance() {
     return this.definition.resistance;
+  }
+
+  get physicalDodge() {
+    return this.definition.physicalDodge ?? 0;
   }
 
   get speed() {
@@ -71,6 +82,10 @@ export class OperatorRuntime {
   get attackRangeId() {
     const override = this.buffs.find((buff) => buff.type === "rangeOverride");
     return override?.rangeId ?? this.definition.attackRangeId;
+  }
+
+  get displayRangeId() {
+    return this.skillRangeDisplay?.rangeId ?? this.attackRangeId;
   }
 
   get rangeTileSize() {
@@ -98,6 +113,10 @@ export class OperatorRuntime {
     return this.buffs.some((buff) => buff.type === "damageReduction");
   }
 
+  get isInvincible() {
+    return this.buffs.some((buff) => buff.type === "invincible");
+  }
+
   update(deltaSeconds: number) {
     const expiring = this.buffs.filter(
       (buff) => buff.duration > 0 && buff.duration - deltaSeconds <= 0,
@@ -106,6 +125,14 @@ export class OperatorRuntime {
     this.buffs = this.buffs
       .map((buff) => ({ ...buff, duration: buff.duration - deltaSeconds }))
       .filter((buff) => buff.duration > 0);
+
+    if (this.skillRangeDisplay) {
+      const duration = this.skillRangeDisplay.duration - deltaSeconds;
+      this.skillRangeDisplay =
+        duration > 0
+          ? { ...this.skillRangeDisplay, duration }
+          : null;
+    }
 
     for (const buff of expiring) {
       if (buff.stunAfterExpire) {
@@ -144,6 +171,10 @@ export class OperatorRuntime {
   }
 
   addBuff(buff: Buff) {
+    if (buff.type === "stun" && this.buffs.some((current) => current.type === "stunImmune")) {
+      return;
+    }
+
     const existingIndex = this.buffs.findIndex(
       (current) => current.type === buff.type,
     );
@@ -159,6 +190,13 @@ export class OperatorRuntime {
     this.scaleHpForMaxHpChange(previousMaxHp);
   }
 
+  showSkillRange(rangeId: AttackRangeId, duration: number) {
+    this.skillRangeDisplay = {
+      rangeId,
+      duration,
+    };
+  }
+
   private scaleHpForMaxHpChange(previousMaxHp: number) {
     if (this.maxHp <= previousMaxHp) {
       return;
@@ -168,7 +206,7 @@ export class OperatorRuntime {
   }
 
   takeDamage(amount: number, type: DamageType) {
-    if (!this.isAlive) {
+    if (!this.isAlive || this.isInvincible) {
       return 0;
     }
 
@@ -183,6 +221,10 @@ export class OperatorRuntime {
   }
 
   takeAttack(amount: number, type: DamageType) {
+    if (type === "physical" && Math.random() < this.physicalDodge) {
+      return 0;
+    }
+
     if (type === "true") {
       return this.takeDamage(amount, type);
     }
@@ -212,6 +254,50 @@ export class OperatorRuntime {
     Body.setVelocity(this.body, {
       x: (velocity.x / length) * target,
       y: (velocity.y / length) * target,
+    });
+  }
+
+  keepInsideArena(arenaSize: number) {
+    const radius = this.definition.radius;
+    const min = radius;
+    const max = arenaSize - radius;
+    const edgeEpsilon = 0.8;
+    const target = this.speed / 60;
+    const minNormalSpeed = Math.max(0.6, target * 0.35);
+    let { x, y } = this.body.position;
+    let { x: velocityX, y: velocityY } = this.body.velocity;
+    let adjusted = false;
+
+    if (x <= min + edgeEpsilon) {
+      x = min;
+      velocityX = Math.max(Math.abs(velocityX), minNormalSpeed);
+      adjusted = true;
+    } else if (x >= max - edgeEpsilon) {
+      x = max;
+      velocityX = -Math.max(Math.abs(velocityX), minNormalSpeed);
+      adjusted = true;
+    }
+
+    if (y <= min + edgeEpsilon) {
+      y = min;
+      velocityY = Math.max(Math.abs(velocityY), minNormalSpeed);
+      adjusted = true;
+    } else if (y >= max - edgeEpsilon) {
+      y = max;
+      velocityY = -Math.max(Math.abs(velocityY), minNormalSpeed);
+      adjusted = true;
+    }
+
+    if (!adjusted) {
+      return;
+    }
+
+    const length = Math.hypot(velocityX, velocityY) || 1;
+
+    Body.setPosition(this.body, { x, y });
+    Body.setVelocity(this.body, {
+      x: (velocityX / length) * target,
+      y: (velocityY / length) * target,
     });
   }
 }

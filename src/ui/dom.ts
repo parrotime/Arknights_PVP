@@ -146,6 +146,20 @@ function renderStatusCard(operator: OperatorSnapshot) {
           </div>
         </div>
       </div>
+      <div class="stat-grid">
+        <div class="stat-item">
+          <div class="stat-label">攻击</div>
+          <div class="stat-value">${Math.round(operator.attack)}</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-label">防御</div>
+          <div class="stat-value">${Math.round(operator.defense)}</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-label">法抗</div>
+          <div class="stat-value">${Math.round(operator.resistance)}</div>
+        </div>
+      </div>
       <div class="skill-name">
         <strong>${operator.skillName}</strong><br />
         ${operator.skillDescription}

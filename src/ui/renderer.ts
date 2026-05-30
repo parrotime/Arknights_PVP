@@ -102,16 +102,17 @@ function drawAttackRange(
     return;
   }
 
-  const cells = displayCellsByRange[operator.attackRangeId];
+  const cells = displayCellsByRange[operator.displayRangeId];
   const tileSize = operator.rangeTileSize;
+  const isSkillRange = operator.displayRangeId !== operator.attackRangeId;
 
   ctx.save();
   ctx.fillStyle =
-    operator.attackRangeId === "amiyaChimera"
+    isSkillRange
       ? "rgb(255 255 255 / 0.2)"
       : "rgb(255 255 255 / 0.12)";
   ctx.strokeStyle =
-    operator.attackRangeId === "amiyaChimera"
+    isSkillRange
       ? "rgb(255 255 255 / 0.88)"
       : "rgb(255 255 255 / 0.68)";
   ctx.lineWidth = 2;
@@ -121,7 +122,7 @@ function drawAttackRange(
       operator.x,
       operator.y,
       operator.facingAngle,
-      operator.attackRangeId,
+      operator.displayRangeId,
       cell,
       tileSize,
     );

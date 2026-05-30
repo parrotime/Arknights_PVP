@@ -41,6 +41,7 @@ export const skills: Record<string, SkillDefinition> = {
     initialSp: 0,
     maxSp: 120,
     duration: 30,
+    skillRangeId: "amiyaChimera",
     activate: ({ self, log }) => {
       self.addBuff({ type: "attack", value: 2.6, duration: 30 });
       self.addBuff({ type: "maxHp", value: 1.75, duration: 30 });
@@ -60,16 +61,62 @@ export const skills: Record<string, SkillDefinition> = {
     },
   },
 
-  chiXiao: {
-    id: "chiXiao",
-    name: "赤霄",
-    description: "造成伤害并短暂提升速度",
+  sheathStrike: {
+    id: "sheathStrike",
+    name: "鞘击",
+    description: "下次攻击造成 260% 物理伤害，并使目标晕眩 1.5 秒",
     initialSp: 0,
-    maxSp: 100,
+    maxSp: 5,
+    skillRangeId: "chenDefault",
+    minimumRangeDisplayDuration: 1,
     activate: ({ self, enemy, log, dealDamage }) => {
-      const dealt = dealDamage(self, enemy, self.attack * 1.8, "physical");
-      self.addBuff({ type: "speed", value: 1.35, duration: 3 });
-      log(`${self.definition.name} 拔出赤霄，造成 ${dealt} 点伤害并加速`);
+      self.addBuff({ type: "invincible", value: 1, duration: 0.25 });
+      self.addBuff({ type: "stunImmune", value: 1, duration: 0.25 });
+      const dealt = dealDamage(self, enemy, self.attack * 2.6, "physical");
+      enemy.addBuff({ type: "stun", value: 1, duration: 1.5 });
+      log(`${self.definition.name} 发动鞘击，造成 ${dealt} 点物理伤害并晕眩目标`);
+    },
+  },
+
+  chiXiaoUnsheath: {
+    id: "chiXiaoUnsheath",
+    name: "赤霄·拔刀",
+    description: "对前方范围造成 410% 物理伤害和 410% 法术伤害",
+    initialSp: 14,
+    maxSp: 25,
+    skillRangeId: "chenSkill2",
+    minimumRangeDisplayDuration: 1,
+    activate: ({ self, enemy, log, dealDamage }) => {
+      self.addBuff({ type: "invincible", value: 1, duration: 0.35 });
+      self.addBuff({ type: "stunImmune", value: 1, duration: 0.35 });
+      const physical = dealDamage(self, enemy, self.attack * 4.1, "physical");
+      const arts = dealDamage(self, enemy, self.attack * 4.1, "arts");
+
+      log(`${self.definition.name} 发动赤霄·拔刀，造成 ${physical} 点物理和 ${arts} 点法术伤害`);
+    },
+  },
+
+  chiXiaoShadowless: {
+    id: "chiXiaoShadowless",
+    name: "赤霄·绝影",
+    description: "寻找最近目标连续斩击 10 次，每次造成 260% 物理伤害，最后一击晕眩 3 秒",
+    initialSp: 10,
+    maxSp: 36,
+    skillRangeId: "chenSkill3",
+    minimumRangeDisplayDuration: 1,
+    activate: ({ self, log, startRepeatedStrike }) => {
+      self.addBuff({ type: "invincible", value: 1, duration: 1 });
+      self.addBuff({ type: "stunImmune", value: 1, duration: 1 });
+      startRepeatedStrike({
+        rangeId: "chenSkill3",
+        hits: 10,
+        interval: 0.08,
+        damageMultiplier: 2.6,
+        damageType: "physical",
+        finalStunDuration: 3,
+        name: "赤霄·绝影",
+      });
+      log(`${self.definition.name} 发动赤霄·绝影，开始连续斩击`);
     },
   },
 

@@ -12,6 +12,7 @@ import type {
   OperatorDefinition,
   OperatorSnapshot,
   OperatorRuntimeLike,
+  RepeatedStrikeDefinition,
 } from "./types";
 import { renderArena } from "../ui/renderer";
 
@@ -36,9 +37,11 @@ export class Game {
   private leftId = "amiya";
   private rightId = "chen";
   private leftSkillId = "chimera";
-  private rightSkillId = "chiXiao";
+  private rightSkillId = "sheathStrike";
   private damageNumbers: FloatingDamageSnapshot[] = [];
   private nextDamageNumberId = 1;
+  private chenTalentTimer = 0;
+  private repeatedStrikes: ActiveRepeatedStrike[] = [];
 
   constructor(ui: BattleUi) {
     this.ui = ui;
@@ -69,7 +72,6 @@ export class Game {
 
     this.ui.restartButton.addEventListener("click", () => {
       this.resetBattle();
-      this.running = true;
     });
 
     this.ui.leftSelect.addEventListener("change", () => {
@@ -127,6 +129,8 @@ export class Game {
     this.winnerName = null;
     this.elapsed = 0;
     this.collisionCooldown = 0;
+    this.chenTalentTimer = 0;
+    this.repeatedStrikes = [];
     this.damageNumbers = [];
     this.nextDamageNumberId = 1;
 
@@ -186,6 +190,14 @@ export class Game {
       return [skills.tacticalChant, skills.spiritBurst, skills.chimera];
     }
 
+    if (operatorId === "chen") {
+      return [
+        skills.sheathStrike,
+        skills.chiXiaoUnsheath,
+        skills.chiXiaoShadowless,
+      ];
+    }
+
     const operator = this.getOperator(operatorId);
     return [this.getSkill(operator.skillId)];
   }
@@ -238,8 +250,10 @@ export class Game {
 
     this.left.update(deltaSeconds);
     this.right.update(deltaSeconds);
-    this.left.chargeSkill(deltaSeconds);
-    this.right.chargeSkill(deltaSeconds);
+    this.chargeNaturalSkill(this.left, deltaSeconds);
+    this.chargeNaturalSkill(this.right, deltaSeconds);
+    this.updateChenTalent(deltaSeconds);
+    this.updateRepeatedStrikes(deltaSeconds);
     this.updateBasicAttack(this.left, this.right, deltaSeconds);
     this.updateBasicAttack(this.right, this.left, deltaSeconds);
     this.tryActivateSkill(this.left, this.right);
@@ -248,6 +262,8 @@ export class Game {
     this.right.applySpeedToBody();
 
     Engine.update(this.physics.engine, fixedStepMs * this.speedMultiplier);
+    this.left.keepInsideArena(arenaSize);
+    this.right.keepInsideArena(arenaSize);
     this.checkWinner();
   }
 
@@ -259,14 +275,72 @@ export class Game {
       return;
     }
 
+    if (!this.isEnemyInSkillRange(self, enemy)) {
+      return;
+    }
+
     self.resetSkill();
+    this.showSkillRange(self);
     self.skill.activate({
       self,
       enemy,
       log: (message) => this.ui.addLog(message),
       dealDamage: (attacker, defender, rawAmount, type) =>
         this.dealDamage(attacker, defender, rawAmount, type),
+      isEnemyInRange: (rangeId) =>
+        this.isEnemyInRangeById(
+          self,
+          enemy,
+          rangeId ?? self.skill.skillRangeId ?? self.attackRangeId,
+        ),
+      startRepeatedStrike: (strike) =>
+        this.startRepeatedStrike(self, enemy, strike),
     });
+  }
+
+  private chargeNaturalSkill(operator: OperatorRuntime, deltaSeconds: number) {
+    if (operator.definition.spRecoveryType !== "natural") {
+      return;
+    }
+
+    operator.chargeSkill(deltaSeconds);
+  }
+
+  private updateChenTalent(deltaSeconds: number) {
+    if (!this.left || !this.right) {
+      return;
+    }
+
+    const chen = [this.left, this.right].find(
+      (operator) => operator.definition.id === "chen" && operator.isAlive,
+    );
+
+    if (!chen) {
+      this.chenTalentTimer = 0;
+      return;
+    }
+
+    this.chenTalentTimer += deltaSeconds;
+
+    while (this.chenTalentTimer >= 4) {
+      this.chenTalentTimer -= 4;
+      chen.gainSp(1);
+    }
+  }
+
+  private showSkillRange(self: OperatorRuntime) {
+    const rangeId = self.skill.skillRangeId;
+
+    if (!rangeId) {
+      return;
+    }
+
+    const duration = Math.max(
+      1,
+      self.skill.minimumRangeDisplayDuration ?? 0,
+      self.skill.duration ?? 0,
+    );
+    self.showSkillRange(rangeId, duration);
   }
 
   private updateBasicAttack(
@@ -290,6 +364,7 @@ export class Game {
     }
 
     self.attackTimer = 0;
+    this.gainAttackRecoverySp(self);
     const multiHit = self.multiHit;
 
     if (multiHit) {
@@ -322,13 +397,111 @@ export class Game {
     this.checkWinner();
   }
 
+  private gainAttackRecoverySp(operator: OperatorRuntime) {
+    if (operator.definition.spRecoveryType === "attack") {
+      operator.gainSp(1);
+    }
+  }
+
+  private startRepeatedStrike(
+    self: OperatorRuntime,
+    enemy: OperatorRuntime,
+    definition: RepeatedStrikeDefinition,
+  ) {
+    self.addBuff({ type: "invincible", value: 1, duration: 1 });
+    self.addBuff({ type: "stunImmune", value: 1, duration: 1 });
+    this.repeatedStrikes.push({
+      self,
+      enemy,
+      definition,
+      remainingHits: definition.hits,
+      timer: 0,
+      totalDamage: 0,
+    });
+  }
+
+  private updateRepeatedStrikes(deltaSeconds: number) {
+    const active: ActiveRepeatedStrike[] = [];
+
+    for (const strike of this.repeatedStrikes) {
+      strike.timer -= deltaSeconds;
+
+      while (strike.timer <= 0 && strike.remainingHits > 0) {
+        if (!strike.self.isAlive || !strike.enemy.isAlive) {
+          strike.remainingHits = 0;
+          break;
+        }
+
+        if (!this.isEnemyInRangeById(
+          strike.self,
+          strike.enemy,
+          strike.definition.rangeId,
+        )) {
+          this.ui.addLog(`${strike.self.definition.name} 的${strike.definition.name}因目标脱离范围而中止`);
+          strike.remainingHits = 0;
+          break;
+        }
+
+        const dealt = this.dealDamage(
+          strike.self,
+          strike.enemy,
+          strike.self.attack * strike.definition.damageMultiplier,
+          strike.definition.damageType,
+        );
+        strike.totalDamage += dealt;
+        strike.remainingHits -= 1;
+
+        if (
+          strike.remainingHits === 0 &&
+          strike.definition.finalStunDuration &&
+          strike.enemy.isAlive
+        ) {
+          strike.enemy.addBuff({
+            type: "stun",
+            value: 1,
+            duration: strike.definition.finalStunDuration,
+          });
+        }
+
+        strike.timer += strike.definition.interval;
+      }
+
+      if (strike.remainingHits > 0) {
+        active.push(strike);
+      } else if (strike.totalDamage > 0) {
+        this.ui.addLog(
+          `${strike.self.definition.name} 完成${strike.definition.name}，合计造成 ${strike.totalDamage} 点伤害`,
+        );
+      }
+    }
+
+    this.repeatedStrikes = active;
+    this.checkWinner();
+  }
+
   private isEnemyInRange(self: OperatorRuntime, enemy: OperatorRuntime) {
+    return this.isEnemyInRangeById(self, enemy, self.attackRangeId);
+  }
+
+  private isEnemyInSkillRange(self: OperatorRuntime, enemy: OperatorRuntime) {
+    return this.isEnemyInRangeById(
+      self,
+      enemy,
+      self.skill.skillRangeId ?? self.attackRangeId,
+    );
+  }
+
+  private isEnemyInRangeById(
+    self: OperatorRuntime,
+    enemy: OperatorRuntime,
+    attackRangeId: OperatorRuntime["attackRangeId"],
+  ) {
     return isPointInAttackRange(
       {
         x: self.body.position.x,
         y: self.body.position.y,
         facingAngle: this.getFacingAngle(self),
-        attackRangeId: self.attackRangeId,
+        attackRangeId,
         rangeTileSize: self.rangeTileSize,
       },
       {
@@ -355,34 +528,29 @@ export class Game {
     rawAmount: number,
     type: DamageType,
   ) {
-    const wasAlive = defender.isAlive;
     const dealt = defender.takeAttack(rawAmount, type);
 
     if (dealt > 0) {
-      this.spawnDamageNumber(defender, dealt);
-    }
-
-    if (dealt > 0 && attacker.definition.id === "amiya") {
-      attacker.gainSp(2);
-    }
-
-    if (wasAlive && !defender.isAlive && attacker.definition.id === "amiya") {
-      attacker.gainSp(8);
-      this.ui.addLog(`${attacker.definition.name} 击倒敌人，天赋额外回复 8 点技力`);
+      this.spawnDamageNumber(attacker, defender, dealt);
     }
 
     return dealt;
   }
 
   private spawnDamageNumber(
+    attacker: OperatorRuntimeLike,
     defender: OperatorRuntimeLike,
     amount: number,
   ) {
+    const directionX = defender.body.position.x - attacker.body.position.x;
+    const directionY = defender.body.position.y - attacker.body.position.y;
+    const length = Math.hypot(directionX, directionY) || 1;
+
     this.damageNumbers.push({
       id: this.nextDamageNumberId,
       amount,
-      x: defender.body.position.x,
-      y: defender.body.position.y - defender.definition.radius - 10,
+      x: defender.body.position.x + (directionX / length) * 8,
+      y: defender.body.position.y - defender.definition.radius - 10 + (directionY / length) * 8,
       age: 0,
       duration: damageNumberDuration,
     });
@@ -489,6 +657,9 @@ export class Game {
       maxHp: operator.maxHp,
       sp: operator.currentSp,
       maxSp: operator.skill.maxSp,
+      attack: operator.attack,
+      defense: operator.defense,
+      resistance: operator.resistance,
       skillName: operator.skill.name,
       skillDescription: operator.skill.description,
       x: operator.body.position.x,
@@ -500,6 +671,7 @@ export class Game {
       isStunned: operator.isStunned,
       facingAngle: this.getFacingAngle(operator),
       attackRangeId: operator.attackRangeId,
+      displayRangeId: operator.displayRangeId,
       rangeTileSize: operator.rangeTileSize,
     };
   }
@@ -520,4 +692,13 @@ export class Game {
     cancelAnimationFrame(this.animationFrameId);
     this.physics?.clear();
   }
+}
+
+interface ActiveRepeatedStrike {
+  self: OperatorRuntime;
+  enemy: OperatorRuntime;
+  definition: RepeatedStrikeDefinition;
+  remainingHits: number;
+  timer: number;
+  totalDamage: number;
 }

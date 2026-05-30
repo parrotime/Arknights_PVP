@@ -8,6 +8,9 @@ export interface RangeCell {
 export const operatorCellByRange: Record<AttackRangeId, RangeCell> = {
   amiyaDefault: { x: 0, y: 0 },
   amiyaChimera: { x: 0, y: 0 },
+  chenDefault: { x: 0, y: 0 },
+  chenSkill2: { x: 0, y: 0 },
+  chenSkill3: { x: 0, y: 0 },
   forwardShort: { x: 0, y: 0 },
   forwardWide: { x: 0, y: 0 },
 };
@@ -44,6 +47,29 @@ export const attackCellsByRange: Record<AttackRangeId, RangeCell[]> = {
     { x: 2, y: 2 },
     { x: 3, y: 2 },
   ],
+  chenDefault: [{ x: 1, y: 0 }],
+  chenSkill2: [
+    { x: 0, y: -1 },
+    { x: 1, y: -1 },
+    { x: 1, y: 0 },
+    { x: 2, y: 0 },
+    { x: 3, y: 0 },
+    { x: 4, y: 0 },
+    { x: 0, y: 1 },
+    { x: 1, y: 1 },
+  ],
+  chenSkill3: [
+    { x: 0, y: -2 },
+    { x: -1, y: -1 },
+    { x: 0, y: -1 },
+    { x: -2, y: 0 },
+    { x: -1, y: 0 },
+    { x: 1, y: 0 },
+    { x: 2, y: 0 },
+    { x: -1, y: 1 },
+    { x: 0, y: 1 },
+    { x: 0, y: 2 },
+  ],
   forwardShort: [
     { x: 1, y: -1 },
     { x: 1, y: 0 },
@@ -67,6 +93,18 @@ export const displayCellsByRange: Record<AttackRangeId, RangeCell[]> = {
   amiyaChimera: [
     ...attackCellsByRange.amiyaChimera,
     operatorCellByRange.amiyaChimera,
+  ],
+  chenDefault: [
+    ...attackCellsByRange.chenDefault,
+    operatorCellByRange.chenDefault,
+  ],
+  chenSkill2: [
+    ...attackCellsByRange.chenSkill2,
+    operatorCellByRange.chenSkill2,
+  ],
+  chenSkill3: [
+    ...attackCellsByRange.chenSkill3,
+    operatorCellByRange.chenSkill3,
   ],
   forwardShort: [
     ...attackCellsByRange.forwardShort,

@@ -9,10 +9,14 @@ export type OperatorRole =
   | "specialist";
 
 export type DamageType = "physical" | "arts" | "true";
+export type SpRecoveryType = "natural" | "attack";
 
 export type AttackRangeId =
   | "amiyaDefault"
   | "amiyaChimera"
+  | "chenDefault"
+  | "chenSkill2"
+  | "chenSkill3"
   | "forwardShort"
   | "forwardWide";
 
@@ -25,7 +29,9 @@ export type BuffType =
   | "rangeOverride"
   | "damageTypeOverride"
   | "stun"
-  | "multiHit";
+  | "multiHit"
+  | "invincible"
+  | "stunImmune";
 
 export interface Buff {
   type: BuffType;
@@ -52,6 +58,10 @@ export interface OperatorDefinition {
   radius: number;
   speed: number;
   spRegen: number;
+  spRecoveryType: SpRecoveryType;
+  attackMultiplier?: number;
+  defenseMultiplier?: number;
+  physicalDodge?: number;
   skillId: string;
 }
 
@@ -65,6 +75,18 @@ export interface SkillContext {
     rawAmount: number,
     type: DamageType,
   ) => number;
+  isEnemyInRange: (rangeId?: AttackRangeId) => boolean;
+  startRepeatedStrike: (strike: RepeatedStrikeDefinition) => void;
+}
+
+export interface RepeatedStrikeDefinition {
+  rangeId: AttackRangeId;
+  hits: number;
+  interval: number;
+  damageMultiplier: number;
+  damageType: DamageType;
+  finalStunDuration?: number;
+  name: string;
 }
 
 export interface SkillDefinition {
@@ -74,6 +96,8 @@ export interface SkillDefinition {
   initialSp: number;
   maxSp: number;
   duration?: number;
+  skillRangeId?: AttackRangeId;
+  minimumRangeDisplayDuration?: number;
   activate: (ctx: SkillContext) => void;
 }
 
@@ -87,14 +111,17 @@ export interface OperatorRuntimeLike {
   attack: number;
   defense: number;
   resistance: number;
+  physicalDodge: number;
   speed: number;
   damageType: DamageType;
   attackInterval: number;
   attackRangeId: AttackRangeId;
+  displayRangeId: AttackRangeId;
   rangeTileSize: number;
   isStunned: boolean;
   multiHit: { hits: number; multiplier: number } | null;
   addBuff: (buff: Buff) => void;
+  showSkillRange: (rangeId: AttackRangeId, duration: number) => void;
   gainSp: (amount: number) => void;
   spendSp: (amount: number) => void;
   takeDamage: (amount: number, type: DamageType) => number;
@@ -110,6 +137,9 @@ export interface OperatorSnapshot {
   maxHp: number;
   sp: number;
   maxSp: number;
+  attack: number;
+  defense: number;
+  resistance: number;
   skillName: string;
   skillDescription: string;
   x: number;
@@ -121,6 +151,7 @@ export interface OperatorSnapshot {
   isStunned: boolean;
   facingAngle: number;
   attackRangeId: AttackRangeId;
+  displayRangeId: AttackRangeId;
   rangeTileSize: number;
 }
 

@@ -15,33 +15,39 @@ app.innerHTML = `
         <h1>明日方舟干员斗蛐蛐</h1>
         <p>本地自动战斗 Demo</p>
       </div>
-      <div class="match-selectors">
-        <label>
-          蓝方
-          <select id="left-operator"></select>
-        </label>
-        <label>
-          蓝方技能
-          <select id="left-skill"></select>
-        </label>
-        <label>
-          红方
-          <select id="right-operator"></select>
-        </label>
-        <label>
-          红方技能
-          <select id="right-skill"></select>
-        </label>
-      </div>
     </section>
 
     <section class="battle-layout">
-      <aside class="status-panel" id="left-status"></aside>
+      <aside class="side-panel side-panel-blue">
+        <div class="match-selectors">
+          <label>
+            蓝方干员
+            <select id="left-operator"></select>
+          </label>
+          <label>
+            蓝方技能
+            <select id="left-skill"></select>
+          </label>
+        </div>
+        <div class="status-panel" id="left-status"></div>
+      </aside>
       <div class="arena-wrap">
         <canvas id="arena" width="720" height="720"></canvas>
         <div class="result-banner" id="result-banner" hidden></div>
       </div>
-      <aside class="status-panel" id="right-status"></aside>
+      <aside class="side-panel side-panel-red">
+        <div class="match-selectors">
+          <label>
+            红方干员
+            <select id="right-operator"></select>
+          </label>
+          <label>
+            红方技能
+            <select id="right-skill"></select>
+          </label>
+        </div>
+        <div class="status-panel" id="right-status"></div>
+      </aside>
     </section>
 
     <section class="controls">
@@ -52,6 +58,7 @@ app.innerHTML = `
         <button class="speed-button active" data-speed="1" type="button">x1</button>
         <button class="speed-button" data-speed="2" type="button">x2</button>
         <button class="speed-button" data-speed="4" type="button">x4</button>
+        <button class="speed-button" data-speed="8" type="button">x8</button>
       </div>
     </section>
 
