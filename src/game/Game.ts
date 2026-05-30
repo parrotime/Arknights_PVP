@@ -90,24 +90,12 @@ export class Game {
 
     this.ui.leftSelect.addEventListener("change", () => {
       this.leftId = this.ui.leftSelect.value;
-
-      if (this.leftId === this.rightId) {
-        this.rightId = this.pickAlternativeOperator(this.leftId);
-        this.rightSkillId = this.getOperator(this.rightId).skillId;
-      }
-
       this.leftSkillId = this.getOperator(this.leftId).skillId;
       this.resetBattle();
     });
 
     this.ui.rightSelect.addEventListener("change", () => {
       this.rightId = this.ui.rightSelect.value;
-
-      if (this.leftId === this.rightId) {
-        this.leftId = this.pickAlternativeOperator(this.rightId);
-        this.leftSkillId = this.getOperator(this.leftId).skillId;
-      }
-
       this.rightSkillId = this.getOperator(this.rightId).skillId;
       this.resetBattle();
     });
@@ -144,10 +132,6 @@ export class Game {
     this.ui.canvas.addEventListener("pointercancel", (event) =>
       this.handleCanvasPointerEnd(event),
     );
-  }
-
-  private pickAlternativeOperator(currentId: string) {
-    return operators.find((operator) => operator.id !== currentId)?.id ?? currentId;
   }
 
   private resetBattle() {
@@ -237,6 +221,14 @@ export class Game {
       ];
     }
 
+    if (operatorId === "saria") {
+      return [
+        skills.sariaFirstAid,
+        skills.sariaMedicineDispensing,
+        skills.sariaCalcification,
+      ];
+    }
+
     const operator = this.getOperator(operatorId);
     return [this.getSkill(operator.skillId)];
   }
@@ -295,20 +287,48 @@ export class Game {
       .filter((projectile) => projectile.age < projectile.duration);
     this.left.update(deltaSeconds);
     this.right.update(deltaSeconds);
+    this.handleExpiredSkills();
     this.chargeNaturalSkill(this.left, deltaSeconds);
     this.chargeNaturalSkill(this.right, deltaSeconds);
     this.updateChenTalent(deltaSeconds);
     this.updateRepeatedStrikes(deltaSeconds);
-    this.updateBasicAttack(this.left, this.right, deltaSeconds);
-    this.updateBasicAttack(this.right, this.left, deltaSeconds);
     this.tryActivateSkill(this.left, this.right);
     this.tryActivateSkill(this.right, this.left);
+    this.updateBasicAttack(this.left, this.right, deltaSeconds);
+    this.updateBasicAttack(this.right, this.left, deltaSeconds);
     this.left.applySpeedToBody();
     this.right.applySpeedToBody();
 
     Engine.update(this.physics.engine, fixedStepMs * this.speedMultiplier);
     this.left.keepInsideArena(arenaSize);
     this.right.keepInsideArena(arenaSize);
+    this.checkWinner();
+  }
+
+  private handleExpiredSkills() {
+    if (!this.left || !this.right || this.winnerName) {
+      return;
+    }
+
+    this.handleChimeraExpiration(this.left, this.right);
+    this.handleChimeraExpiration(this.right, this.left);
+  }
+
+  private handleChimeraExpiration(
+    self: OperatorRuntime,
+    enemy: OperatorRuntime,
+  ) {
+    if (
+      self.expiredSkillId !== "chimera" ||
+      self.definition.id !== "amiya" ||
+      !self.isAlive ||
+      !enemy.isAlive
+    ) {
+      return;
+    }
+
+    self.takeDamage(self.currentHp, "true");
+    this.addBattleLog(`${self.definition.name} 的奇美拉结束，强制退出战场`);
     this.checkWinner();
   }
 
@@ -326,36 +346,57 @@ export class Game {
     self: OperatorRuntime,
     enemy: OperatorRuntime,
   ) {
-    if (
-      !self.isAlive ||
-      !enemy.isAlive ||
-      self.isSkillActive ||
-      self.currentSp < self.skill.maxSp
-    ) {
+    const spCost = self.skill.spCost ?? self.skill.maxSp;
+
+    if (!self.isAlive || !enemy.isAlive || self.isSkillActive || self.currentSp < spCost) {
       return;
     }
 
-    if (!self.skill.autoActivate && !this.isEnemyInSkillRange(self, enemy)) {
-      return;
-    }
-
-    self.startSkillCooldown(self.skill.duration ?? 0);
-    this.showSkillRange(self);
-    self.skill.activate({
+    const skillContext = {
       self,
       enemy,
-      log: (message) => this.addBattleLog(message),
-      dealDamage: (attacker, defender, rawAmount, type) =>
-        this.dealDamage(attacker, defender, rawAmount, type),
-      isEnemyInRange: (rangeId) =>
+      log: (message: string) => this.addBattleLog(message),
+      dealDamage: (
+        attacker: OperatorRuntimeLike,
+        defender: OperatorRuntimeLike,
+        rawAmount: number,
+        type: DamageType,
+      ) => this.dealDamage(attacker, defender, rawAmount, type),
+      heal: (
+        healer: OperatorRuntimeLike,
+        target: OperatorRuntimeLike,
+        amount: number,
+      ) => this.healOperator(healer, target, amount),
+      isEnemyInRange: (rangeId?: OperatorRuntime["attackRangeId"]) =>
         this.isEnemyInRangeById(
           self,
           enemy,
           rangeId ?? self.skill.skillRangeId ?? self.attackRangeId,
         ),
-      startRepeatedStrike: (strike) =>
+      isSelfInRange: (rangeId?: OperatorRuntime["attackRangeId"]) =>
+        this.isSelfInRangeById(
+          self,
+          rangeId ?? self.skill.skillRangeId ?? self.attackRangeId,
+        ),
+      startRepeatedStrike: (strike: RepeatedStrikeDefinition) =>
         this.startRepeatedStrike(self, enemy, strike),
-    });
+    };
+
+    if (self.skill.canActivate && !self.skill.canActivate(skillContext)) {
+      return;
+    }
+
+    if (
+      !self.skill.canActivate &&
+      !self.skill.autoActivate &&
+      !this.isEnemyInSkillRange(self, enemy)
+    ) {
+      return;
+    }
+
+    self.startSkillCooldown(self.skill.duration ?? 0, spCost);
+    this.showSkillRange(self);
+    self.skill.activate(skillContext);
   }
 
   private chargeNaturalSkill(operator: OperatorRuntime, deltaSeconds: number) {
@@ -415,6 +456,19 @@ export class Game {
     self.attackTimer += deltaSeconds;
 
     if (self.attackTimer < self.attackInterval) {
+      return;
+    }
+
+    if (self.skill.id === "sariaCalcification" && self.isSkillActive) {
+      self.attackTimer = 0;
+      const healed = this.healOperator(self, self, self.attack * 0.2);
+
+      if (healed > 0) {
+        this.addBattleLog(
+          `${self.definition.name} 的钙质化恢复 ${healed} 点生命`,
+        );
+      }
+
       return;
     }
 
@@ -582,6 +636,26 @@ export class Game {
     );
   }
 
+  private isSelfInRangeById(
+    self: OperatorRuntime,
+    attackRangeId: OperatorRuntime["attackRangeId"],
+  ) {
+    return isPointInAttackRange(
+      {
+        x: self.body.position.x,
+        y: self.body.position.y,
+        facingAngle: this.getFacingAngle(self),
+        attackRangeId,
+        rangeTileSize: self.rangeTileSize,
+      },
+      {
+        x: self.body.position.x,
+        y: self.body.position.y,
+        radius: self.definition.radius,
+      },
+    );
+  }
+
   private getFacingAngle(self: OperatorRuntime) {
     if (!this.running && self.manualFacingAngle !== null) {
       return self.manualFacingAngle;
@@ -623,6 +697,20 @@ export class Game {
     }
 
     return dealt;
+  }
+
+  private healOperator(
+    healer: OperatorRuntimeLike,
+    target: OperatorRuntimeLike,
+    amount: number,
+  ) {
+    const healed = target.heal(amount);
+
+    if (healed > 0) {
+      healer.gainSp(1);
+    }
+
+    return healed;
   }
 
   private spawnProjectile(attacker: OperatorRuntime, defender: OperatorRuntime) {

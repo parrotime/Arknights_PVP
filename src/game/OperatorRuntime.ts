@@ -15,6 +15,7 @@ export class OperatorRuntime {
   currentSp = 0;
   attackTimer = 0;
   manualFacingAngle: number | null = null;
+  expiredSkillId: string | null = null;
   private buffs: Buff[] = [];
   private skillRangeDisplay: { rangeId: AttackRangeId; duration: number } | null =
     null;
@@ -144,11 +145,17 @@ export class OperatorRuntime {
     return this.buffs.some((buff) => buff.type === "damageReduction");
   }
 
+  get artsFragileMultiplier() {
+    const buff = this.buffs.find((current) => current.type === "artsFragile");
+    return buff?.value ?? 1;
+  }
+
   get isInvincible() {
     return this.buffs.some((buff) => buff.type === "invincible");
   }
 
   update(deltaSeconds: number) {
+    this.expiredSkillId = null;
     const expiring = this.buffs.filter(
       (buff) => buff.duration > 0 && buff.duration - deltaSeconds <= 0,
     );
@@ -167,8 +174,13 @@ export class OperatorRuntime {
 
     if (this.activeSkill) {
       const remaining = this.activeSkill.remaining - deltaSeconds;
-      this.activeSkill =
-        remaining > 0 ? { ...this.activeSkill, remaining } : null;
+
+      if (remaining > 0) {
+        this.activeSkill = { ...this.activeSkill, remaining };
+      } else {
+        this.expiredSkillId = this.skill.id;
+        this.activeSkill = null;
+      }
     }
 
     for (const buff of expiring) {
@@ -240,8 +252,8 @@ export class OperatorRuntime {
     };
   }
 
-  startSkillCooldown(duration: number) {
-    this.currentSp = 0;
+  startSkillCooldown(duration: number, spCost = this.skill.maxSp) {
+    this.currentSp = Math.max(0, this.currentSp - spCost);
 
     if (duration <= 0) {
       this.activeSkill = null;
@@ -287,7 +299,10 @@ export class OperatorRuntime {
     }
 
     if (type === "arts") {
-      return this.takeDamage(amount * (1 - this.resistance / 100), type);
+      return this.takeDamage(
+        amount * this.artsFragileMultiplier * (1 - this.resistance / 100),
+        type,
+      );
     }
 
     return this.takeDamage(Math.max(1, amount - this.defense), type);

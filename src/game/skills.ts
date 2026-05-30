@@ -185,6 +185,60 @@ export const skills: Record<string, SkillDefinition> = {
     },
   },
 
+  sariaFirstAid: {
+    id: "sariaFirstAid",
+    name: "急救",
+    description: "可充能 2 次；生命低于一半时恢复 150% 攻击力生命",
+    initialSp: 0,
+    maxSp: 10,
+    spCost: 5,
+    skillRangeId: "sariaSkill1",
+    minimumRangeDisplayDuration: 1,
+    spRecoveryType: "natural",
+    canActivate: ({ self, isSelfInRange }) =>
+      self.currentHp <= self.maxHp * 0.5 && isSelfInRange("sariaSkill1"),
+    activate: ({ self, log, heal }) => {
+      const healed = heal(self, self, self.attack * 1.5);
+      log(`${self.definition.name} 使用急救，恢复 ${healed} 点生命并回复 1 点技力`);
+    },
+  },
+
+  sariaMedicineDispensing: {
+    id: "sariaMedicineDispensing",
+    name: "药物配置",
+    description: "治疗附近所有友军，恢复 110% 攻击力生命",
+    initialSp: 0,
+    maxSp: 8,
+    skillRangeId: "sariaSkill2",
+    minimumRangeDisplayDuration: 1,
+    spRecoveryType: "natural",
+    canActivate: ({ self, isSelfInRange }) =>
+      self.currentHp < self.maxHp && isSelfInRange("sariaSkill2"),
+    activate: ({ self, log, heal }) => {
+      const healed = heal(self, self, self.attack * 1.1);
+      log(`${self.definition.name} 使用药物配置，恢复 ${healed} 点生命并回复 1 点技力`);
+    },
+  },
+
+  sariaCalcification: {
+    id: "sariaCalcification",
+    name: "钙质化",
+    description: "22 秒内治疗范围内友军，并使敌人受到法术伤害 +40%、移动速度 -60%",
+    initialSp: 55,
+    maxSp: 80,
+    duration: 22,
+    skillRangeId: "sariaSkill3",
+    spRecoveryType: "natural",
+    canActivate: ({ isEnemyInRange }) => isEnemyInRange("sariaSkill3"),
+    activate: ({ self, enemy, log }) => {
+      self.addBuff({ type: "attackInterval", value: 1 / self.definition.attackInterval, duration: 22 });
+      self.addBuff({ type: "rangeOverride", value: 1, duration: 22, rangeId: "sariaSkill3" });
+      enemy.addBuff({ type: "speed", value: 0.4, duration: 22 });
+      enemy.addBuff({ type: "artsFragile", value: 1.4, duration: 22 });
+      log(`${self.definition.name} 开启钙质化，敌方移动速度降低并更易受到法术伤害`);
+    },
+  },
+
   ironWall: {
     id: "ironWall",
     name: "力之锯",

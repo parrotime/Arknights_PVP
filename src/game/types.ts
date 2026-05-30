@@ -19,6 +19,10 @@ export type AttackRangeId =
   | "chenSkill2"
   | "chenSkill3"
   | "exusiaiDefault"
+  | "sariaDefault"
+  | "sariaSkill1"
+  | "sariaSkill2"
+  | "sariaSkill3"
   | "forwardShort"
   | "forwardWide";
 
@@ -31,6 +35,7 @@ export type BuffType =
   | "maxHp"
   | "rangeOverride"
   | "damageTypeOverride"
+  | "artsFragile"
   | "stun"
   | "multiHit"
   | "invincible"
@@ -83,7 +88,9 @@ export interface SkillContext {
     rawAmount: number,
     type: DamageType,
   ) => number;
+  heal: (healer: OperatorRuntimeLike, target: OperatorRuntimeLike, amount: number) => number;
   isEnemyInRange: (rangeId?: AttackRangeId) => boolean;
+  isSelfInRange: (rangeId?: AttackRangeId) => boolean;
   startRepeatedStrike: (strike: RepeatedStrikeDefinition) => void;
 }
 
@@ -106,8 +113,10 @@ export interface SkillDefinition {
   duration?: number;
   skillRangeId?: AttackRangeId;
   minimumRangeDisplayDuration?: number;
+  spCost?: number;
   spRecoveryType?: SpRecoveryType;
   autoActivate?: boolean;
+  canActivate?: (ctx: SkillContext) => boolean;
   activate: (ctx: SkillContext) => void;
 }
 
@@ -130,11 +139,12 @@ export interface OperatorRuntimeLike {
   rangeTileSize: number;
   isStunned: boolean;
   isSkillActive: boolean;
+  artsFragileMultiplier: number;
   multiHit: { hits: number; multiplier: number; consumeOnAttack: boolean } | null;
   addBuff: (buff: Buff) => void;
   removeBuff: (type: BuffType) => void;
   showSkillRange: (rangeId: AttackRangeId, duration: number) => void;
-  startSkillCooldown: (duration: number) => void;
+  startSkillCooldown: (duration: number, spCost?: number) => void;
   gainSp: (amount: number) => void;
   spendSp: (amount: number) => void;
   takeDamage: (amount: number, type: DamageType) => number;

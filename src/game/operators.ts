@@ -52,7 +52,7 @@ export const operators: OperatorDefinition[] = [
     damageType: "physical",
     attackInterval: 1.3,
     attackRangeId: "chenDefault",
-    rangeTileSize: 64,
+    rangeTileSize: 66,
     radius: 31,
     speed: 188,
     spRegen: 0,
@@ -107,21 +107,22 @@ export const operators: OperatorDefinition[] = [
   {
     id: "saria",
     name: "塞雷娅",
-    role: "medic",
+    englishName: "Saria",
+    role: "defender",
     attackMode: "melee",
-    maxHp: 1760,
-    attack: 70,
-    defense: 52,
+    maxHp: 31500,
+    attack: 485,
+    defense: 595,
     resistance: 10,
     damageType: "physical",
-    attackInterval: 1.8,
-    attackRangeId: "forwardShort",
+    attackInterval: 1.2,
+    attackRangeId: "sariaDefault",
     rangeTileSize: 64,
     radius: 33,
     speed: 150,
-    spRegen: 15,
+    spRegen: 1,
     spRecoveryType: "natural",
-    skillId: "firstAid",
+    skillId: "sariaFirstAid",
   },
   {
     id: "phantom",
@@ -145,7 +146,7 @@ export const operators: OperatorDefinition[] = [
 ];
 
 for (const operator of operators) {
-  if (operator.id !== "chen" && operator.id !== "exusiai") {
+  if (operator.id !== "chen" && operator.id !== "exusiai" && operator.id !== "saria") {
     operator.maxHp *= 10;
   }
 }
