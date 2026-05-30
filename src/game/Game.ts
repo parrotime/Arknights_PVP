@@ -8,6 +8,8 @@ import type {
   BattleSnapshot,
   BattleUi,
   DamageType,
+  FacingDirection,
+  FloatingDamageSnapshot,
   OperatorDefinition,
   OperatorSnapshot,
   OperatorRuntimeLike,
@@ -16,8 +18,9 @@ import { renderArena } from "../ui/renderer";
 
 const arenaSize = 720;
 const collisionDamageCooldown = 0.5;
-const collisionDamageRatio = 0.18;
+const collisionDamageRatio = 0.1;
 const fixedStepMs = 1000 / 60;
+const damageNumberDuration = 0.95;
 
 export class Game {
   private readonly ui: BattleUi;
@@ -33,6 +36,8 @@ export class Game {
   private speedMultiplier = 1;
   private leftId = "amiya";
   private rightId = "chen";
+  private damageNumbers: FloatingDamageSnapshot[] = [];
+  private nextDamageNumberId = 1;
 
   constructor(ui: BattleUi) {
     this.ui = ui;
@@ -106,6 +111,8 @@ export class Game {
     this.winnerName = null;
     this.elapsed = 0;
     this.collisionCooldown = 0;
+    this.damageNumbers = [];
+    this.nextDamageNumberId = 1;
 
     const leftDefinition = this.getOperator(this.leftId);
     const rightDefinition = this.getOperator(this.rightId);
@@ -179,6 +186,9 @@ export class Game {
       0,
       this.collisionCooldown - deltaSeconds,
     );
+    this.damageNumbers = this.damageNumbers
+      .map((number) => ({ ...number, age: number.age + deltaSeconds }))
+      .filter((number) => number.age < number.duration);
 
     this.left.update(deltaSeconds);
     this.right.update(deltaSeconds);
@@ -271,7 +281,7 @@ export class Game {
       {
         x: self.body.position.x,
         y: self.body.position.y,
-        facingAngle: this.getFacingAngle(self, enemy),
+        facingDirection: this.getFacingDirection(self, enemy),
         attackRangeId: self.attackRangeId,
         rangeTileSize: self.rangeTileSize,
       },
@@ -283,11 +293,18 @@ export class Game {
     );
   }
 
-  private getFacingAngle(self: OperatorRuntime, enemy: OperatorRuntime) {
-    return Math.atan2(
-      enemy.body.position.y - self.body.position.y,
-      enemy.body.position.x - self.body.position.x,
-    );
+  private getFacingDirection(
+    self: OperatorRuntime,
+    enemy: OperatorRuntime,
+  ): FacingDirection {
+    const deltaX = enemy.body.position.x - self.body.position.x;
+    const deltaY = enemy.body.position.y - self.body.position.y;
+
+    if (Math.abs(deltaX) >= Math.abs(deltaY)) {
+      return deltaX >= 0 ? "right" : "left";
+    }
+
+    return deltaY >= 0 ? "down" : "up";
   }
 
   private dealDamage(
@@ -298,6 +315,10 @@ export class Game {
   ) {
     const wasAlive = defender.isAlive;
     const dealt = defender.takeAttack(rawAmount, type);
+
+    if (dealt > 0) {
+      this.spawnDamageNumber(defender, dealt);
+    }
 
     if (dealt > 0 && attacker.definition.id === "amiya") {
       attacker.gainSp(2);
@@ -311,6 +332,21 @@ export class Game {
     return dealt;
   }
 
+  private spawnDamageNumber(
+    defender: OperatorRuntimeLike,
+    amount: number,
+  ) {
+    this.damageNumbers.push({
+      id: this.nextDamageNumberId,
+      amount,
+      x: defender.body.position.x,
+      y: defender.body.position.y - defender.definition.radius - 10,
+      age: 0,
+      duration: damageNumberDuration,
+    });
+    this.nextDamageNumberId += 1;
+  }
+
   private handleOperatorCollision() {
     if (!this.left || !this.right || this.collisionCooldown > 0) {
       return;
@@ -322,14 +358,24 @@ export class Game {
 
     const leftDamage = Math.max(
       1,
-      (this.left.attack - this.right.defense) * collisionDamageRatio,
+      this.left.attack * collisionDamageRatio,
     );
     const rightDamage = Math.max(
       1,
-      (this.right.attack - this.left.defense) * collisionDamageRatio,
+      this.right.attack * collisionDamageRatio,
     );
-    const dealtToRight = this.right.takeDamage(leftDamage, "physical");
-    const dealtToLeft = this.left.takeDamage(rightDamage, "physical");
+    const dealtToRight = this.dealDamage(
+      this.left,
+      this.right,
+      leftDamage,
+      this.left.damageType,
+    );
+    const dealtToLeft = this.dealDamage(
+      this.right,
+      this.left,
+      rightDamage,
+      this.right.damageType,
+    );
 
     this.collisionCooldown = collisionDamageCooldown;
     this.ui.addLog(
@@ -379,6 +425,7 @@ export class Game {
     return {
       left: this.createOperatorSnapshot(this.left),
       right: this.createOperatorSnapshot(this.right),
+      damageNumbers: this.damageNumbers,
       elapsed: this.elapsed,
       running: this.running,
       winnerName: this.winnerName,
@@ -399,7 +446,7 @@ export class Game {
       name: operator.definition.name,
       role: operator.definition.role,
       hp: operator.currentHp,
-      maxHp: operator.definition.maxHp,
+      maxHp: operator.maxHp,
       sp: operator.currentSp,
       maxSp: operator.skill.maxSp,
       skillName: operator.skill.name,
@@ -411,7 +458,7 @@ export class Game {
       isAlive: operator.isAlive,
       hasShield: operator.hasShield,
       isStunned: operator.isStunned,
-      facingAngle: this.getFacingAngle(operator, enemy),
+      facingDirection: this.getFacingDirection(operator, enemy),
       attackRangeId: operator.attackRangeId,
       rangeTileSize: operator.rangeTileSize,
     };

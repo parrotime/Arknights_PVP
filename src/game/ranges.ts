@@ -1,4 +1,4 @@
-import type { AttackRangeId } from "./types";
+import type { AttackRangeId, FacingDirection } from "./types";
 
 export interface RangeCell {
   x: number;
@@ -57,22 +57,19 @@ export function isPointInAttackRange(
   attacker: {
     x: number;
     y: number;
-    facingAngle: number;
+    facingDirection: FacingDirection;
     attackRangeId: AttackRangeId;
     rangeTileSize: number;
   },
   target: { x: number; y: number; radius: number },
 ) {
   const cells = attackRanges[attacker.attackRangeId];
-  const cos = Math.cos(attacker.facingAngle);
-  const sin = Math.sin(attacker.facingAngle);
   const tileSize = attacker.rangeTileSize;
 
   for (const cell of cells) {
-    const localX = (cell.x + 0.5) * tileSize;
-    const localY = (cell.y + 0.5) * tileSize;
-    const centerX = attacker.x + localX * cos - localY * sin;
-    const centerY = attacker.y + localX * sin + localY * cos;
+    const oriented = orientCell(cell, attacker.facingDirection);
+    const centerX = attacker.x + (oriented.x + 0.5) * tileSize;
+    const centerY = attacker.y + (oriented.y + 0.5) * tileSize;
     const half = tileSize / 2;
     const distanceX = Math.abs(target.x - centerX);
     const distanceY = Math.abs(target.y - centerY);
@@ -83,4 +80,20 @@ export function isPointInAttackRange(
   }
 
   return false;
+}
+
+export function orientCell(cell: RangeCell, direction: FacingDirection) {
+  if (direction === "right") {
+    return cell;
+  }
+
+  if (direction === "down") {
+    return { x: -cell.y - 1, y: cell.x };
+  }
+
+  if (direction === "left") {
+    return { x: -cell.x - 1, y: -cell.y - 1 };
+  }
+
+  return { x: cell.y, y: -cell.x - 1 };
 }

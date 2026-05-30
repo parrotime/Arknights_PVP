@@ -122,3 +122,7 @@ export const operators: OperatorDefinition[] = [
     skillId: "shadowPush",
   },
 ];
+
+for (const operator of operators) {
+  operator.maxHp *= 10;
+}

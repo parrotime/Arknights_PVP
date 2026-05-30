@@ -16,6 +16,8 @@ export type AttackRangeId =
   | "forwardShort"
   | "forwardWide";
 
+export type FacingDirection = "right" | "down" | "left" | "up";
+
 export type BuffType =
   | "speed"
   | "damageReduction"
@@ -119,14 +121,24 @@ export interface OperatorSnapshot {
   isAlive: boolean;
   hasShield: boolean;
   isStunned: boolean;
-  facingAngle: number;
+  facingDirection: FacingDirection;
   attackRangeId: AttackRangeId;
   rangeTileSize: number;
+}
+
+export interface FloatingDamageSnapshot {
+  id: number;
+  amount: number;
+  x: number;
+  y: number;
+  age: number;
+  duration: number;
 }
 
 export interface BattleSnapshot {
   left: OperatorSnapshot;
   right: OperatorSnapshot;
+  damageNumbers: FloatingDamageSnapshot[];
   elapsed: number;
   running: boolean;
   winnerName: string | null;

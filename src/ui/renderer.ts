@@ -1,5 +1,5 @@
 import type { BattleSnapshot, OperatorSnapshot } from "../game/types";
-import { attackRanges } from "../game/ranges";
+import { attackRanges, orientCell } from "../game/ranges";
 
 const arenaSize = 720;
 
@@ -19,6 +19,7 @@ export function renderArena(
   drawAttackRange(ctx, snapshot.right);
   drawOperator(ctx, snapshot.left);
   drawOperator(ctx, snapshot.right);
+  drawDamageNumbers(ctx, snapshot);
   drawCenterInfo(ctx, snapshot);
 }
 
@@ -102,33 +103,51 @@ function drawAttackRange(
   }
 
   const cells = attackRanges[operator.attackRangeId];
-  const cos = Math.cos(operator.facingAngle);
-  const sin = Math.sin(operator.facingAngle);
   const tileSize = operator.rangeTileSize;
 
   ctx.save();
   ctx.fillStyle =
     operator.attackRangeId === "amiyaChimera"
-      ? "rgb(255 255 255 / 0.16)"
-      : "rgb(255 255 255 / 0.09)";
+      ? "rgb(255 255 255 / 0.2)"
+      : "rgb(255 255 255 / 0.12)";
   ctx.strokeStyle =
     operator.attackRangeId === "amiyaChimera"
-      ? "rgb(255 255 255 / 0.4)"
-      : "rgb(255 255 255 / 0.24)";
-  ctx.lineWidth = 1;
+      ? "rgb(255 255 255 / 0.88)"
+      : "rgb(255 255 255 / 0.68)";
+  ctx.lineWidth = 2;
 
   for (const cell of cells) {
-    const localX = cell.x * tileSize;
-    const localY = cell.y * tileSize;
-    const cornerX = operator.x + localX * cos - localY * sin;
-    const cornerY = operator.y + localX * sin + localY * cos;
+    const oriented = orientCell(cell, operator.facingDirection);
+    const cornerX = operator.x + oriented.x * tileSize;
+    const cornerY = operator.y + oriented.y * tileSize;
 
-    ctx.save();
-    ctx.translate(cornerX, cornerY);
-    ctx.rotate(operator.facingAngle);
-    ctx.fillRect(0, 0, tileSize, tileSize);
-    ctx.strokeRect(0, 0, tileSize, tileSize);
-    ctx.restore();
+    ctx.fillRect(cornerX, cornerY, tileSize, tileSize);
+    ctx.strokeRect(cornerX, cornerY, tileSize, tileSize);
+  }
+
+  ctx.restore();
+}
+
+function drawDamageNumbers(
+  ctx: CanvasRenderingContext2D,
+  snapshot: BattleSnapshot,
+) {
+  ctx.save();
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.font = "900 26px Inter, Microsoft YaHei, sans-serif";
+  ctx.lineWidth = 5;
+
+  for (const number of snapshot.damageNumbers) {
+    const progress = number.age / number.duration;
+    const y = number.y - progress * 34;
+    const alpha = 1 - progress;
+
+    ctx.globalAlpha = Math.max(0, alpha);
+    ctx.strokeStyle = "rgb(82 0 0)";
+    ctx.fillStyle = "#ff3b30";
+    ctx.strokeText(`-${number.amount}`, number.x, y);
+    ctx.fillText(`-${number.amount}`, number.x, y);
   }
 
   ctx.restore();
