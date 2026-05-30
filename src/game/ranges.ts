@@ -13,6 +13,7 @@ export const operatorCellByRange: Record<AttackRangeId, RangeCell> = {
   chenSkill3: { x: 0, y: 0 },
   exusiaiDefault: { x: 0, y: 0 },
   hoshigumaDefault: { x: 0, y: 0 },
+  phantomSkill3: { x: 0, y: 0 },
   sariaDefault: { x: 0, y: 0 },
   sariaSkill1: { x: 0, y: 0 },
   sariaSkill2: { x: 0, y: 0 },
@@ -95,6 +96,16 @@ export const attackCellsByRange: Record<AttackRangeId, RangeCell[]> = {
   hoshigumaDefault: [
     { x: 1, y: 0 },
   ],
+  phantomSkill3: [
+    { x: -1, y: -1 },
+    { x: 0, y: -1 },
+    { x: 1, y: -1 },
+    { x: -1, y: 0 },
+    { x: 1, y: 0 },
+    { x: -1, y: 1 },
+    { x: 0, y: 1 },
+    { x: 1, y: 1 },
+  ],
   sariaDefault: [{ x: 0, y: 0 }],
   sariaSkill1: [
     { x: -1, y: -1 },
@@ -157,11 +168,7 @@ export const attackCellsByRange: Record<AttackRangeId, RangeCell[]> = {
     { x: 1, y: 2 },
     { x: 0, y: 3 },
   ],
-  forwardShort: [
-    { x: 1, y: -1 },
-    { x: 1, y: 0 },
-    { x: 1, y: 1 },
-  ],
+  forwardShort: [{ x: 1, y: 0 }],
   forwardWide: [
     { x: 1, y: -1 },
     { x: 2, y: -1 },
@@ -200,6 +207,10 @@ export const displayCellsByRange: Record<AttackRangeId, RangeCell[]> = {
   hoshigumaDefault: [
     ...attackCellsByRange.hoshigumaDefault,
     operatorCellByRange.hoshigumaDefault,
+  ],
+  phantomSkill3: [
+    ...attackCellsByRange.phantomSkill3,
+    operatorCellByRange.phantomSkill3,
   ],
   sariaDefault: [...attackCellsByRange.sariaDefault],
   sariaSkill1: [...attackCellsByRange.sariaSkill1],

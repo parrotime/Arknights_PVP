@@ -58,6 +58,15 @@ app.innerHTML = `
       <button id="start-button" type="button">开始</button>
       <button id="pause-button" type="button">暂停</button>
       <button id="restart-button" type="button">重开</button>
+      <label class="arena-size-control">
+        场地
+        <select id="arena-size">
+          <option value="350">350 × 350</option>
+          <option value="500">500 × 500</option>
+          <option value="648" selected>648 × 648</option>
+          <option value="800">800 × 800</option>
+        </select>
+      </label>
       <div class="speed-group" aria-label="战斗速度">
         <button class="speed-button active" data-speed="1" type="button">x1</button>
         <button class="speed-button" data-speed="2" type="button">x2</button>

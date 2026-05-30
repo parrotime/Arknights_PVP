@@ -20,6 +20,7 @@ export type AttackRangeId =
   | "chenSkill3"
   | "exusiaiDefault"
   | "hoshigumaDefault"
+  | "phantomSkill3"
   | "sariaDefault"
   | "sariaSkill1"
   | "sariaSkill2"
@@ -40,6 +41,8 @@ export type BuffType =
   | "artsFragile"
   | "stun"
   | "multiHit"
+  | "physicalShield"
+  | "physicalDodge"
   | "invincible"
   | "stunImmune";
 
@@ -52,6 +55,8 @@ export interface Buff {
   hits?: number;
   consumeOnAttack?: boolean;
   stunAfterExpire?: number;
+  stacks?: number;
+  consumeOnDamage?: boolean;
 }
 
 export interface OperatorDefinition {
@@ -60,6 +65,9 @@ export interface OperatorDefinition {
   englishName?: string;
   role: OperatorRole;
   attackMode: AttackMode;
+  ownerId?: string;
+  isSummon?: boolean;
+  summonOf?: string;
   maxHp: number;
   attack: number;
   defense: number;
@@ -93,8 +101,10 @@ export interface SkillContext {
   ) => number;
   heal: (healer: OperatorRuntimeLike, target: OperatorRuntimeLike, amount: number) => number;
   isEnemyInRange: (rangeId?: AttackRangeId) => boolean;
+  getEnemiesInRange: (rangeId?: AttackRangeId) => OperatorRuntimeLike[];
   isSelfInRange: (rangeId?: AttackRangeId) => boolean;
   startRepeatedStrike: (strike: RepeatedStrikeDefinition) => void;
+  pushEnemy: (target: OperatorRuntimeLike, force: number) => void;
 }
 
 export interface RepeatedStrikeDefinition {
@@ -120,6 +130,7 @@ export interface SkillDefinition {
   spRecoveryType?: SpRecoveryType;
   autoActivate?: boolean;
   passive?: boolean;
+  deployEffect?: boolean;
   canActivate?: (ctx: SkillContext) => boolean;
   activate: (ctx: SkillContext) => void;
 }
@@ -156,6 +167,7 @@ export interface OperatorRuntimeLike {
   takeDamage: (amount: number, type: DamageType) => number;
   takeAttack: (amount: number, type: DamageType) => number;
   heal: (amount: number) => number;
+  consumeAttackStack: () => void;
 }
 
 export interface OperatorSnapshot {
@@ -164,6 +176,7 @@ export interface OperatorSnapshot {
   englishName?: string;
   role: OperatorRole;
   attackMode: AttackMode;
+  isSummon?: boolean;
   hp: number;
   maxHp: number;
   sp: number;
@@ -185,6 +198,14 @@ export interface OperatorSnapshot {
   attackRangeId: AttackRangeId;
   displayRangeId: AttackRangeId;
   rangeTileSize: number;
+}
+
+export interface SummonStatusSnapshot {
+  ownerSide: "left" | "right";
+  name: string;
+  isAlive: boolean;
+  isDeployed: boolean;
+  redeployRemaining: number;
 }
 
 export interface BattleCastSnapshot {
@@ -216,8 +237,11 @@ export interface ProjectileSnapshot {
 }
 
 export interface BattleSnapshot {
+  arenaSize: number;
   left: OperatorSnapshot;
   right: OperatorSnapshot;
+  summons: OperatorSnapshot[];
+  summonStatuses: SummonStatusSnapshot[];
   damageNumbers: FloatingDamageSnapshot[];
   projectiles: ProjectileSnapshot[];
   battleCast: BattleCastSnapshot[];
@@ -232,6 +256,7 @@ export interface BattleUi {
   rightSelect: HTMLSelectElement;
   leftSkillSelect: HTMLSelectElement;
   rightSkillSelect: HTMLSelectElement;
+  arenaSizeSelect: HTMLSelectElement;
   startButton: HTMLButtonElement;
   pauseButton: HTMLButtonElement;
   restartButton: HTMLButtonElement;

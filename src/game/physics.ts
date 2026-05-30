@@ -20,6 +20,13 @@ export interface PhysicsWorld {
   engine: Engine;
   leftBody: Body;
   rightBody: Body;
+  addOperatorBody: (
+    label: string,
+    definition: OperatorDefinition,
+    x: number,
+    y: number,
+  ) => Body;
+  removeBody: (body: Body) => void;
   clear: () => void;
 }
 
@@ -27,27 +34,15 @@ export function createPhysicsWorld(
   size: number,
   left: OperatorDefinition,
   right: OperatorDefinition,
-  onOperatorCollision: () => void,
+  onOperatorCollision: (bodyA: Body, bodyB: Body) => void,
 ): PhysicsWorld {
   const engine = Engine.create({
     gravity: { x: 0, y: 0 },
   });
 
   const half = size / 2;
-  const leftBody = Bodies.circle(size * 0.3, half, left.radius, {
-    label: "operator:left",
-    restitution: 1,
-    friction: 0,
-    frictionAir: 0,
-    inertia: Infinity,
-  });
-  const rightBody = Bodies.circle(size * 0.7, half, right.radius, {
-    label: "operator:right",
-    restitution: 1,
-    friction: 0,
-    frictionAir: 0,
-    inertia: Infinity,
-  });
+  const leftBody = createOperatorBody("operator:left", left, size * 0.3, half);
+  const rightBody = createOperatorBody("operator:right", right, size * 0.7, half);
 
   const walls = [
     Bodies.rectangle(half, -wallThickness / 2, size, wallThickness, {
@@ -77,10 +72,9 @@ export function createPhysicsWorld(
       const labels = [pair.bodyA.label, pair.bodyB.label];
 
       if (
-        labels.includes("operator:left") &&
-        labels.includes("operator:right")
+        labels.every((label) => label.startsWith("operator:"))
       ) {
-        onOperatorCollision();
+        onOperatorCollision(pair.bodyA, pair.bodyB);
       }
     }
   };
@@ -91,10 +85,33 @@ export function createPhysicsWorld(
     engine,
     leftBody,
     rightBody,
+    addOperatorBody: (label, definition, x, y) => {
+      const body = createOperatorBody(label, definition, x, y);
+      Composite.add(engine.world, body);
+      return body;
+    },
+    removeBody: (body) => {
+      Composite.remove(engine.world, body);
+    },
     clear: () => {
       Events.off(engine, "collisionStart", collisionHandler);
       Composite.clear(engine.world, false);
       Engine.clear(engine);
     },
   };
+}
+
+function createOperatorBody(
+  label: string,
+  definition: OperatorDefinition,
+  x: number,
+  y: number,
+) {
+  return Bodies.circle(x, y, definition.radius, {
+    label,
+    restitution: 1,
+    friction: 0,
+    frictionAir: 0,
+    inertia: Infinity,
+  });
 }

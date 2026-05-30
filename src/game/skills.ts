@@ -276,6 +276,94 @@ export const skills: Record<string, SkillDefinition> = {
     },
   },
 
+  phantomNightPhantom: {
+    id: "phantomNightPhantom",
+    name: "暗夜魅影",
+    description: "被动：部署后获得 40% 物理闪避和可吸收 50% 最大生命的物理屏障，持续 10 秒",
+    initialSp: 0,
+    maxSp: 0,
+    passive: true,
+    deployEffect: true,
+    activate: ({ self, log }) => {
+      self.addBuff({ type: "physicalShield", value: self.maxHp * 0.5, duration: 10 });
+      self.addBuff({ type: "physicalDodge", value: 0.4, duration: 10 });
+      log(`${self.definition.name} 进入暗夜魅影，获得物理闪避和屏障`);
+    },
+  },
+
+  phantomBloodyOpus: {
+    id: "phantomBloodyOpus",
+    name: "血色乐章",
+    description: "被动：部署后获得 9 层攻击力 +16%，成功造成伤害后消耗一层",
+    initialSp: 0,
+    maxSp: 0,
+    passive: true,
+    deployEffect: true,
+    activate: ({ self, log }) => {
+      for (let index = 0; index < 9; index += 1) {
+        self.addBuff({
+          type: "attack",
+          value: 1.16,
+          duration: 9999,
+          stacks: 1,
+          consumeOnDamage: true,
+        });
+      }
+
+      log(`${self.definition.name} 奏响血色乐章，获得 9 层攻击增益`);
+    },
+  },
+
+  phantomNightRaid: {
+    id: "phantomNightRaid",
+    name: "夜幕突袭",
+    description: "被动：部署后对周围敌人造成 240% 物理伤害，推开并随机施加停顿、束缚或晕眩 3 秒",
+    initialSp: 0,
+    maxSp: 0,
+    skillRangeId: "phantomSkill3",
+    minimumRangeDisplayDuration: 1,
+    passive: true,
+    deployEffect: true,
+    activate: ({ self, enemy, log, dealDamage, isEnemyInRange, getEnemiesInRange, pushEnemy }) => {
+      self.showSkillRange("phantomSkill3", 1);
+
+      if (!isEnemyInRange("phantomSkill3")) {
+        log(`${self.definition.name} 发动夜幕突袭，但目标不在范围内`);
+        return;
+      }
+
+      const extraTargets = getEnemiesInRange("phantomSkill3").filter(
+        (target) => target !== enemy,
+      );
+      const dealt = dealDamage(self, enemy, self.attack * 2.4, "physical");
+      pushEnemy(enemy, 8);
+
+      const state = Math.floor(Math.random() * 3);
+
+      if (state === 0) {
+        enemy.addBuff({ type: "speed", value: 0.35, duration: 3 });
+        log(`${self.definition.name} 发动夜幕突袭，造成 ${dealt} 点物理伤害并使目标停顿`);
+      } else if (state === 1) {
+        enemy.addBuff({ type: "stun", value: 1, duration: 3 });
+        log(`${self.definition.name} 发动夜幕突袭，造成 ${dealt} 点物理伤害并束缚目标`);
+      } else {
+        enemy.addBuff({ type: "stun", value: 1, duration: 3 });
+        log(`${self.definition.name} 发动夜幕突袭，造成 ${dealt} 点物理伤害并晕眩目标`);
+      }
+
+      for (const target of extraTargets) {
+        dealDamage(self, target, self.attack * 2.4, "physical");
+        pushEnemy(target, 8);
+
+        if (Math.random() < 1 / 3) {
+          target.addBuff({ type: "speed", value: 0.35, duration: 3 });
+        } else {
+          target.addBuff({ type: "stun", value: 1, duration: 3 });
+        }
+      }
+    },
+  },
+
   ironWall: {
     id: "ironWall",
     name: "力之锯",

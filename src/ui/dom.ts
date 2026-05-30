@@ -13,6 +13,7 @@ export function createBattleUi(): BattleUi {
   const rightSelect = getElement<HTMLSelectElement>("right-operator");
   const leftSkillSelect = getElement<HTMLSelectElement>("left-skill");
   const rightSkillSelect = getElement<HTMLSelectElement>("right-skill");
+  const arenaSizeSelect = getElement<HTMLSelectElement>("arena-size");
   const startButton = getElement<HTMLButtonElement>("start-button");
   const pauseButton = getElement<HTMLButtonElement>("pause-button");
   const restartButton = getElement<HTMLButtonElement>("restart-button");
@@ -32,6 +33,7 @@ export function createBattleUi(): BattleUi {
     rightSelect,
     leftSkillSelect,
     rightSkillSelect,
+    arenaSizeSelect,
     startButton,
     pauseButton,
     restartButton,
@@ -48,8 +50,14 @@ export function createBattleUi(): BattleUi {
       fillSkillSelect(rightSkillSelect, rightSkills, rightSkillId);
     },
     updateStatus: (snapshot) => {
-      leftStatus.innerHTML = renderStatusCard(snapshot.left);
-      rightStatus.innerHTML = renderStatusCard(snapshot.right);
+      leftStatus.innerHTML = renderStatusCard(
+        snapshot.left,
+        snapshot.summonStatuses.filter((summon) => summon.ownerSide === "left"),
+      );
+      rightStatus.innerHTML = renderStatusCard(
+        snapshot.right,
+        snapshot.summonStatuses.filter((summon) => summon.ownerSide === "right"),
+      );
       resultBanner.hidden = !snapshot.winnerName;
       timer.textContent = formatElapsed(snapshot.elapsed);
       updateBattleCast(battleCast, snapshot.battleCast);
@@ -123,7 +131,10 @@ function fillSkillSelect(
   select.value = selectedId;
 }
 
-function renderStatusCard(operator: OperatorSnapshot) {
+function renderStatusCard(
+  operator: OperatorSnapshot,
+  summonStatuses: { name: string; isDeployed: boolean; redeployRemaining: number }[] = [],
+) {
   const hpRatio = toPercent(operator.hp / operator.maxHp);
   const hasSpBar = operator.maxSp > 0;
   const spRatio = hasSpBar ? toPercent(operator.sp / operator.maxSp) : 100;
@@ -175,6 +186,7 @@ function renderStatusCard(operator: OperatorSnapshot) {
       <div class="skill-name">
         <strong>${operator.skillName}</strong><br />
         ${operator.skillDescription}
+        ${renderSummonStatuses(summonStatuses)}
         ${operator.isStunned ? '<div class="state-line">晕眩中</div>' : ""}
       </div>
     </article>
@@ -183,6 +195,22 @@ function renderStatusCard(operator: OperatorSnapshot) {
 
 function toPercent(ratio: number) {
   return Math.max(0, Math.min(100, ratio * 100));
+}
+
+function renderSummonStatuses(
+  summonStatuses: { name: string; isDeployed: boolean; redeployRemaining: number }[],
+) {
+  return summonStatuses
+    .map((summon) => {
+      const status = summon.isDeployed
+        ? "存活"
+        : summon.redeployRemaining > 0
+          ? `复活倒计时 ${Math.ceil(summon.redeployRemaining)}s`
+          : "未部署";
+
+      return `<div class="state-line">${summon.name}：${status}</div>`;
+    })
+    .join("");
 }
 
 function updateBattleCast(

@@ -51,11 +51,11 @@ export class OperatorRuntime {
   }
 
   get attack() {
-    const attackBuff = this.buffs.find((buff) => buff.type === "attack");
+    const attackBuffs = this.buffs.filter((buff) => buff.type === "attack");
     return (
       this.definition.attack *
       (this.definition.attackMultiplier ?? 1) *
-      (attackBuff?.value ?? 1)
+      attackBuffs.reduce((total, buff) => total * buff.value, 1)
     );
   }
 
@@ -82,7 +82,8 @@ export class OperatorRuntime {
   }
 
   get physicalDodge() {
-    return this.definition.physicalDodge ?? 0;
+    const dodgeBuff = this.buffs.find((buff) => buff.type === "physicalDodge");
+    return (this.definition.physicalDodge ?? 0) + (dodgeBuff?.value ?? 0);
   }
 
   get damageBlockChance() {
@@ -164,7 +165,9 @@ export class OperatorRuntime {
   }
 
   get hasShield() {
-    return this.buffs.some((buff) => buff.type === "damageReduction");
+    return this.buffs.some(
+      (buff) => buff.type === "damageReduction" || buff.type === "physicalShield",
+    );
   }
 
   get artsFragileMultiplier() {
@@ -259,9 +262,13 @@ export class OperatorRuntime {
       this.freezeMovement();
     }
 
-    const existingIndex = this.buffs.findIndex(
-      (current) => current.type === buff.type,
-    );
+    const existingIndex = this.buffs.findIndex((current) => {
+      if (current.type !== buff.type) {
+        return false;
+      }
+
+      return !(buff.type === "attack" && buff.consumeOnDamage);
+    });
     const previousMaxHp = this.maxHp;
 
     if (existingIndex >= 0) {
@@ -318,10 +325,58 @@ export class OperatorRuntime {
       (buff) => buff.type === "damageReduction",
     );
     const reduction = type === "true" ? 0 : (reductionBuff?.value ?? 0);
-    const finalDamage = Math.max(1, Math.round(amount * (1 - reduction)));
+    let finalDamage = Math.max(1, Math.round(amount * (1 - reduction)));
+
+    if (type === "physical") {
+      finalDamage = this.absorbPhysicalShield(finalDamage);
+    }
 
     this.currentHp = Math.max(0, this.currentHp - finalDamage);
     return finalDamage;
+  }
+
+  consumeAttackStack() {
+    const index = this.buffs.findIndex(
+      (buff) =>
+        buff.type === "attack" &&
+        Boolean(buff.consumeOnDamage) &&
+        (buff.stacks ?? 0) > 0,
+    );
+
+    if (index < 0) {
+      return;
+    }
+
+    const buff = this.buffs[index];
+    const stacks = (buff.stacks ?? 1) - 1;
+
+    if (stacks <= 0) {
+      this.buffs.splice(index, 1);
+      return;
+    }
+
+    this.buffs[index] = { ...buff, stacks };
+  }
+
+  private absorbPhysicalShield(damage: number) {
+    const index = this.buffs.findIndex((buff) => buff.type === "physicalShield");
+
+    if (index < 0) {
+      return damage;
+    }
+
+    const buff = this.buffs[index];
+    const remainingShield = Math.max(0, buff.value);
+    const absorbed = Math.min(damage, remainingShield);
+    const nextShield = remainingShield - absorbed;
+
+    if (nextShield <= 0) {
+      this.buffs.splice(index, 1);
+    } else {
+      this.buffs[index] = { ...buff, value: nextShield };
+    }
+
+    return damage - absorbed;
   }
 
   takeAttack(amount: number, type: DamageType) {

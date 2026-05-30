@@ -1,8 +1,6 @@
 import type { BattleSnapshot, OperatorSnapshot } from "../game/types";
 import { displayCellsByRange, getRangeCellCenter } from "../game/ranges";
 
-const arenaSize = 648;
-
 export function renderArena(
   canvas: HTMLCanvasElement,
   snapshot: BattleSnapshot,
@@ -14,16 +12,22 @@ export function renderArena(
   }
 
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  drawArenaBackground(ctx);
+  drawArenaBackground(ctx, snapshot.arenaSize);
   drawAttackRange(ctx, snapshot.left);
   drawAttackRange(ctx, snapshot.right);
+  for (const summon of snapshot.summons) {
+    drawAttackRange(ctx, summon);
+  }
   drawProjectiles(ctx, snapshot);
   drawOperator(ctx, snapshot.left);
   drawOperator(ctx, snapshot.right);
+  for (const summon of snapshot.summons) {
+    drawOperator(ctx, summon);
+  }
   drawDamageNumbers(ctx, snapshot);
 }
 
-function drawArenaBackground(ctx: CanvasRenderingContext2D) {
+function drawArenaBackground(ctx: CanvasRenderingContext2D, arenaSize: number) {
   const gridSize = 60;
 
   ctx.fillStyle = "#171f2d";
@@ -80,9 +84,13 @@ function drawOperator(
   ctx.arc(0, 0, operator.radius, 0, Math.PI * 2);
   ctx.fillStyle = operator.isAlive ? operator.color : "#566070";
   ctx.fill();
-  ctx.lineWidth = 4;
+  ctx.lineWidth = operator.isSummon ? 3 : 4;
   ctx.strokeStyle = operator.isAlive ? "#f7fbff" : "#2c3440";
+  if (operator.isSummon) {
+    ctx.setLineDash([6, 4]);
+  }
   ctx.stroke();
+  ctx.setLineDash([]);
 
   ctx.fillStyle = "#10151d";
   ctx.font = "700 17px Microsoft YaHei, sans-serif";

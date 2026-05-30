@@ -1,6 +1,6 @@
-import { Engine } from "matter-js";
+import { Body, Engine, Vector, type Body as MatterBody } from "matter-js";
 import { OperatorRuntime } from "./OperatorRuntime";
-import { operators, roleColors } from "./operators";
+import { operators, phantomMirrorDefinition, roleColors } from "./operators";
 import { createPhysicsWorld, type PhysicsWorld } from "./physics";
 import {
   displayCellsByRange,
@@ -21,7 +21,7 @@ import type {
 } from "./types";
 import { renderArena } from "../ui/renderer";
 
-const arenaSize = 648;
+const defaultArenaSize = 648;
 const collisionDamageCooldown = 0.5;
 const collisionDamageRatio = 0.1;
 const fixedStepMs = 1000 / 60;
@@ -36,13 +36,16 @@ export class Game {
   private physics: PhysicsWorld | null = null;
   private left: OperatorRuntime | null = null;
   private right: OperatorRuntime | null = null;
+  private summons: SummonRuntime[] = [];
   private animationFrameId = 0;
   private lastFrameTime = 0;
   private collisionCooldown = 0;
+  private collisionCooldowns = new Map<string, number>();
   private elapsed = 0;
   private running = false;
   private winnerName: string | null = null;
   private speedMultiplier = 1;
+  private arenaSize = defaultArenaSize;
   private leftId = "amiya";
   private rightId = "chen";
   private leftSkillId = "chimera";
@@ -83,6 +86,11 @@ export class Game {
         this.resetBattle();
       }
 
+      if (this.elapsed === 0) {
+        this.deployInitialSummons();
+        this.applyDeployEffects();
+      }
+
       this.running = true;
     });
 
@@ -92,6 +100,11 @@ export class Game {
     });
 
     this.ui.restartButton.addEventListener("click", () => {
+      this.resetBattle();
+    });
+
+    this.ui.arenaSizeSelect.addEventListener("change", () => {
+      this.arenaSize = Number(this.ui.arenaSizeSelect.value) || defaultArenaSize;
       this.resetBattle();
     });
 
@@ -149,8 +162,10 @@ export class Game {
     this.winnerName = null;
     this.elapsed = 0;
     this.collisionCooldown = 0;
+    this.collisionCooldowns.clear();
     this.chenTalentTimers = { left: 0, right: 0 };
     this.repeatedStrikes = [];
+    this.summons = [];
     this.damageNumbers = [];
     this.projectiles = [];
     this.battleCast = [];
@@ -163,10 +178,10 @@ export class Game {
     const rightDefinition = this.getOperator(this.rightId);
 
     this.physics = createPhysicsWorld(
-      arenaSize,
+      this.arenaSize,
       leftDefinition,
       rightDefinition,
-      () => this.handleOperatorCollision(),
+      (bodyA, bodyB) => this.handleOperatorCollision(bodyA, bodyB),
     );
 
     this.left = new OperatorRuntime(
@@ -181,6 +196,12 @@ export class Game {
     );
 
     this.restoreSetupState(preservedSetup);
+    if (this.left.definition.id === "phantom") {
+      this.ensureMirrorSummon(this.left, "left");
+    }
+    if (this.right.definition.id === "phantom") {
+      this.ensureMirrorSummon(this.right, "right");
+    }
     this.left.applySpeedToBody();
     this.right.applySpeedToBody();
     this.ui.pauseButton.textContent = "暂停";
@@ -245,6 +266,14 @@ export class Game {
         skills.hoshigumaWarpath,
         skills.hoshigumaThorns,
         skills.hoshigumaSaw,
+      ];
+    }
+
+    if (operatorId === "phantom") {
+      return [
+        skills.phantomNightPhantom,
+        skills.phantomBloodyOpus,
+        skills.phantomNightRaid,
       ];
     }
 
@@ -336,6 +365,7 @@ export class Game {
       0,
       this.collisionCooldown - deltaSeconds,
     );
+    this.updateCollisionCooldowns(deltaSeconds);
     this.damageNumbers = this.damageNumbers
       .map((number) => ({ ...number, age: number.age + deltaSeconds }))
       .filter((number) => number.age < number.duration);
@@ -345,25 +375,32 @@ export class Game {
         age: projectile.age + deltaSeconds,
       }))
       .filter((projectile) => projectile.age < projectile.duration);
-    this.left.update(deltaSeconds);
-    this.right.update(deltaSeconds);
+    for (const operator of this.getAllOperators()) {
+      operator.update(deltaSeconds);
+    }
     this.handleExpiredSkills();
-    this.chargeNaturalSkill(this.left, deltaSeconds);
-    this.chargeNaturalSkill(this.right, deltaSeconds);
+    for (const operator of this.getAllOperators()) {
+      this.chargeNaturalSkill(operator, deltaSeconds);
+    }
     this.updateChenTalent(deltaSeconds);
+    this.updateSummons(deltaSeconds);
     this.updateRepeatedStrikes(deltaSeconds);
-    this.tryActivateSkill(this.left, this.right);
-    this.tryActivateSkill(this.right, this.left);
-    this.updateBasicAttack(this.left, this.right, deltaSeconds);
-    this.updateBasicAttack(this.right, this.left, deltaSeconds);
-    this.left.updateDrift(deltaSeconds);
-    this.right.updateDrift(deltaSeconds);
-    this.left.applySpeedToBody(deltaSeconds);
-    this.right.applySpeedToBody(deltaSeconds);
+    for (const operator of this.getAllOperators()) {
+      const enemy = this.findNearestEnemy(operator);
+
+      if (enemy) {
+        this.tryActivateSkill(operator, enemy);
+        this.updateBasicAttack(operator, enemy, deltaSeconds);
+      }
+
+      operator.updateDrift(deltaSeconds);
+      operator.applySpeedToBody(deltaSeconds);
+    }
 
     Engine.update(this.physics.engine, fixedStepMs * this.speedMultiplier);
-    this.left.keepInsideArena(arenaSize);
-    this.right.keepInsideArena(arenaSize);
+    for (const operator of this.getAllOperators()) {
+      operator.keepInsideArena(this.arenaSize);
+    }
     this.checkWinner();
   }
 
@@ -400,6 +437,20 @@ export class Game {
       .filter((cast) => cast.age < cast.duration);
   }
 
+  private updateCollisionCooldowns(deltaSeconds: number) {
+    const next = new Map<string, number>();
+
+    for (const [key, value] of this.collisionCooldowns) {
+      const remaining = value - deltaSeconds;
+
+      if (remaining > 0) {
+        next.set(key, remaining);
+      }
+    }
+
+    this.collisionCooldowns = next;
+  }
+
   private tryActivateSkill(
     self: OperatorRuntime,
     enemy: OperatorRuntime,
@@ -416,35 +467,7 @@ export class Game {
       return;
     }
 
-    const skillContext = {
-      self,
-      enemy,
-      log: (message: string) => this.addBattleLog(message),
-      dealDamage: (
-        attacker: OperatorRuntimeLike,
-        defender: OperatorRuntimeLike,
-        rawAmount: number,
-        type: DamageType,
-      ) => this.dealDamage(attacker, defender, rawAmount, type),
-      heal: (
-        healer: OperatorRuntimeLike,
-        target: OperatorRuntimeLike,
-        amount: number,
-      ) => this.healOperator(healer, target, amount),
-      isEnemyInRange: (rangeId?: OperatorRuntime["attackRangeId"]) =>
-        this.isEnemyInRangeById(
-          self,
-          enemy,
-          rangeId ?? self.skill.skillRangeId ?? self.attackRangeId,
-        ),
-      isSelfInRange: (rangeId?: OperatorRuntime["attackRangeId"]) =>
-        this.isSelfInRangeById(
-          self,
-          rangeId ?? self.skill.skillRangeId ?? self.attackRangeId,
-        ),
-      startRepeatedStrike: (strike: RepeatedStrikeDefinition) =>
-        this.startRepeatedStrike(self, enemy, strike),
-    };
+    const skillContext = this.createSkillContext(self, enemy);
 
     if (self.skill.canActivate && !self.skill.canActivate(skillContext)) {
       return;
@@ -515,6 +538,262 @@ export class Game {
     self.showSkillRange(rangeId, duration);
   }
 
+  private createSkillContext(self: OperatorRuntime, enemy: OperatorRuntime) {
+    return {
+      self,
+      enemy,
+      log: (message: string) => this.addBattleLog(message),
+      dealDamage: (
+        attacker: OperatorRuntimeLike,
+        defender: OperatorRuntimeLike,
+        rawAmount: number,
+        type: DamageType,
+      ) => this.dealDamage(attacker, defender, rawAmount, type),
+      heal: (
+        healer: OperatorRuntimeLike,
+        target: OperatorRuntimeLike,
+        amount: number,
+      ) => this.healOperator(healer, target, amount),
+      isEnemyInRange: (rangeId?: OperatorRuntime["attackRangeId"]) =>
+        this.isEnemyInRangeById(
+          self,
+          enemy,
+          rangeId ?? self.skill.skillRangeId ?? self.attackRangeId,
+        ),
+      getEnemiesInRange: (rangeId?: OperatorRuntime["attackRangeId"]) =>
+        this.getEnemiesInRangeById(
+          self,
+          rangeId ?? self.skill.skillRangeId ?? self.attackRangeId,
+        ),
+      isSelfInRange: (rangeId?: OperatorRuntime["attackRangeId"]) =>
+        this.isSelfInRangeById(
+          self,
+          rangeId ?? self.skill.skillRangeId ?? self.attackRangeId,
+        ),
+      startRepeatedStrike: (strike: RepeatedStrikeDefinition) =>
+        this.startRepeatedStrike(self, enemy, strike),
+      pushEnemy: (target: OperatorRuntimeLike, force: number) =>
+        this.pushAway(self, target, force),
+    };
+  }
+
+  private deployInitialSummons() {
+    if (!this.left || !this.right) {
+      return;
+    }
+
+    this.ensureMirrorSummon(this.left, "left");
+    this.ensureMirrorSummon(this.right, "right");
+
+    for (const summon of this.summons) {
+      if (!summon.removedFromWorld || !summon.owner.isAlive) {
+        continue;
+      }
+
+      const deployed = this.deployMirror(summon);
+
+      if (deployed) {
+        this.addBattleLog(`${deployed.definition.name} 进入战场`);
+      }
+    }
+  }
+
+  private ensureMirrorSummon(owner: OperatorRuntime, ownerSide: BattleSide) {
+    if (owner.definition.id !== "phantom") {
+      return;
+    }
+
+    if (this.summons.some((summon) => summon.owner === owner)) {
+      return;
+    }
+
+    const definition: OperatorDefinition = {
+      ...phantomMirrorDefinition,
+      ownerId: ownerSide,
+      skillId: owner.skill.id,
+    };
+    const runtime = new OperatorRuntime(definition, owner.skill, owner.body);
+
+    this.summons.push({
+      owner,
+      ownerSide,
+      runtime,
+      redeployTimer: 0,
+      removedFromWorld: true,
+    });
+  }
+
+  private deployMirror(summon: SummonRuntime) {
+    if (!this.physics) {
+      return null;
+    }
+
+    const owner = summon.owner;
+    const ownerSide = summon.ownerSide;
+    const target = this.findNearestEnemy(owner);
+    const origin = target ?? owner;
+    const angle = target
+      ? Math.atan2(
+          target.body.position.y - owner.body.position.y,
+          target.body.position.x - owner.body.position.x,
+        )
+      : this.getFacingAngle(owner);
+    const distance = origin.definition.radius + phantomMirrorDefinition.radius + 18;
+    const x = Math.max(
+      phantomMirrorDefinition.radius,
+      Math.min(
+        this.arenaSize - phantomMirrorDefinition.radius,
+        origin.body.position.x - Math.cos(angle) * distance,
+      ),
+    );
+    const y = Math.max(
+      phantomMirrorDefinition.radius,
+      Math.min(
+        this.arenaSize - phantomMirrorDefinition.radius,
+        origin.body.position.y - Math.sin(angle) * distance,
+      ),
+    );
+    const body = this.physics.addOperatorBody(
+      `operator:${ownerSide}:mirror:${this.summons.indexOf(summon)}`,
+      summon.runtime.definition,
+      x,
+      y,
+    );
+    const mirror = new OperatorRuntime(summon.runtime.definition, owner.skill, body);
+
+    mirror.setFacingAngle(target ? Math.atan2(
+      target.body.position.y - mirror.body.position.y,
+      target.body.position.x - mirror.body.position.x,
+    ) : this.getFacingAngle(owner));
+    mirror.applySpeedToBody();
+
+    summon.runtime = mirror;
+    summon.redeployTimer = 0;
+    summon.removedFromWorld = false;
+    return mirror;
+  }
+
+  private applyDeployEffects() {
+    for (const operator of this.getAllOperators()) {
+      this.applyDeployEffect(operator);
+    }
+  }
+
+  private applyDeployEffect(operator: OperatorRuntime) {
+    if (!operator.skill.deployEffect) {
+      return;
+    }
+
+    const enemy = this.findNearestEnemy(operator);
+
+    if (!enemy) {
+      return;
+    }
+
+    operator.skill.activate(this.createSkillContext(operator, enemy));
+  }
+
+  private updateSummons(deltaSeconds: number) {
+    if (!this.physics) {
+      return;
+    }
+
+    for (const summon of this.summons) {
+      if (!summon.owner.isAlive) {
+        if (!summon.removedFromWorld) {
+          this.physics.removeBody(summon.runtime.body);
+          summon.removedFromWorld = true;
+        }
+
+        continue;
+      }
+
+      if (summon.runtime.isAlive && !summon.removedFromWorld) {
+        continue;
+      }
+
+      if (!summon.removedFromWorld) {
+        this.physics.removeBody(summon.runtime.body);
+        summon.removedFromWorld = true;
+        summon.redeployTimer = 35;
+        this.addBattleLog(`${summon.runtime.definition.name} 被击败，35 秒后可再次部署`);
+      }
+
+      summon.redeployTimer -= deltaSeconds;
+
+      if (summon.redeployTimer > 0) {
+        continue;
+      }
+
+      const redeployed = this.deployMirror(summon);
+
+      if (redeployed) {
+        this.addBattleLog(`${redeployed.definition.name} 再次进入战场`);
+        this.applyDeployEffect(redeployed);
+      }
+    }
+  }
+
+  private getAllOperators() {
+    return [
+      this.left,
+      this.right,
+      ...this.summons
+        .filter((summon) => !summon.removedFromWorld)
+        .map((summon) => summon.runtime),
+    ]
+      .filter((operator): operator is OperatorRuntime =>
+        Boolean(operator && operator.isAlive),
+      );
+  }
+
+  private findNearestEnemy(self: OperatorRuntime) {
+    const enemies = this.getAllOperators().filter(
+      (operator) => operator !== self && this.areEnemies(self, operator),
+    );
+
+    let nearest: OperatorRuntime | null = null;
+    let nearestDistance = Infinity;
+
+    for (const enemy of enemies) {
+      const distance = Vector.magnitude(
+        Vector.sub(enemy.body.position, self.body.position),
+      );
+
+      if (distance < nearestDistance) {
+        nearest = enemy;
+        nearestDistance = distance;
+      }
+    }
+
+    return nearest;
+  }
+
+  private areEnemies(a: OperatorRuntime, b: OperatorRuntime) {
+    const sideA = this.getOperatorSide(a);
+    const sideB = this.getOperatorSide(b);
+    return Boolean(sideA && sideB && sideA !== sideB);
+  }
+
+  private getOperatorSide(operator: OperatorRuntime): BattleSide | null {
+    if (operator === this.left) {
+      return "left";
+    }
+
+    if (operator === this.right) {
+      return "right";
+    }
+
+    return (
+      this.summons.find((summon) => summon.runtime === operator)?.ownerSide ??
+      null
+    );
+  }
+
+  private getOperatorByBody(body: MatterBody) {
+    return this.getAllOperators().find((operator) => operator.body === body) ?? null;
+  }
+
   private updateBasicAttack(
     self: OperatorRuntime,
     enemy: OperatorRuntime,
@@ -557,12 +836,17 @@ export class Game {
       let total = 0;
 
       for (let index = 0; index < multiHit.hits; index += 1) {
-        total += this.dealDamage(
+        const dealt = this.dealDamage(
           self,
           enemy,
           self.attack * multiHit.multiplier,
           self.damageType,
         );
+        total += dealt;
+
+        if (dealt > 0) {
+          self.consumeAttackStack();
+        }
       }
 
       if (multiHit.consumeOnAttack) {
@@ -580,6 +864,7 @@ export class Game {
     const dealt = this.dealDamage(self, enemy, self.attack, self.damageType);
 
     if (dealt > 0) {
+      self.consumeAttackStack();
       this.addBattleLog(
         `${self.definition.name} 攻击命中，造成 ${dealt} 点${this.getDamageTypeLabel(self.damageType)}伤害`,
       );
@@ -642,6 +927,9 @@ export class Game {
           strike.definition.damageType,
         );
         strike.totalDamage += dealt;
+        if (dealt > 0) {
+          strike.self.consumeAttackStack();
+        }
         strike.remainingHits -= 1;
 
         if (
@@ -702,6 +990,18 @@ export class Game {
         y: enemy.body.position.y,
         radius: enemy.definition.radius,
       },
+    );
+  }
+
+  private getEnemiesInRangeById(
+    self: OperatorRuntime,
+    attackRangeId: OperatorRuntime["attackRangeId"],
+  ) {
+    return this.getAllOperators().filter(
+      (operator) =>
+        operator !== self &&
+        this.areEnemies(self, operator) &&
+        this.isEnemyInRangeById(self, operator, attackRangeId),
     );
   }
 
@@ -874,6 +1174,21 @@ export class Game {
     return healed;
   }
 
+  private pushAway(
+    source: OperatorRuntimeLike,
+    target: OperatorRuntimeLike,
+    force: number,
+  ) {
+    const direction = Vector.normalise(
+      Vector.sub(target.body.position, source.body.position),
+    );
+
+    Body.setVelocity(target.body, {
+      x: direction.x * force,
+      y: direction.y * force,
+    });
+  }
+
   private spawnProjectile(attacker: OperatorRuntime, defender: OperatorRuntime) {
     if (!this.isRangedOperator(attacker)) {
       return;
@@ -930,41 +1245,54 @@ export class Game {
     this.nextDamageNumberId += 1;
   }
 
-  private handleOperatorCollision() {
-    if (!this.left || !this.right || this.collisionCooldown > 0) {
+  private handleOperatorCollision(bodyA: MatterBody, bodyB: MatterBody) {
+    const operatorA = this.getOperatorByBody(bodyA);
+    const operatorB = this.getOperatorByBody(bodyB);
+
+    if (!operatorA || !operatorB || !this.areEnemies(operatorA, operatorB)) {
       return;
     }
 
-    if (!this.left.isAlive || !this.right.isAlive || this.winnerName) {
+    const cooldownKey = this.getCollisionKey(operatorA, operatorB);
+
+    if (this.collisionCooldowns.get(cooldownKey)) {
       return;
     }
 
-    const leftDamage = Math.max(
-      1,
-      this.left.attack * collisionDamageRatio,
-    );
-    const rightDamage = Math.max(
-      1,
-      this.right.attack * collisionDamageRatio,
-    );
-    const dealtToRight = this.dealCollisionDamage(
-      this.left,
-      this.right,
-      leftDamage,
-    );
-    const dealtToLeft = this.dealCollisionDamage(
-      this.right,
-      this.left,
-      rightDamage,
-    );
-    this.left.jitterVelocity(5);
-    this.right.jitterVelocity(5);
+    if (!operatorA.isAlive || !operatorB.isAlive || this.winnerName) {
+      return;
+    }
 
-    this.collisionCooldown = collisionDamageCooldown;
+    const damageA = Math.max(
+      1,
+      operatorA.attack * collisionDamageRatio,
+    );
+    const damageB = Math.max(
+      1,
+      operatorB.attack * collisionDamageRatio,
+    );
+    const dealtToB = this.dealCollisionDamage(
+      operatorA,
+      operatorB,
+      damageA,
+    );
+    const dealtToA = this.dealCollisionDamage(
+      operatorB,
+      operatorA,
+      damageB,
+    );
+    operatorA.jitterVelocity(5);
+    operatorB.jitterVelocity(5);
+
+    this.collisionCooldowns.set(cooldownKey, collisionDamageCooldown);
     this.addBattleLog(
-      `碰撞：${this.left.definition.name} 造成 ${dealtToRight} 碰撞伤害，${this.right.definition.name} 造成 ${dealtToLeft} 碰撞伤害`,
+      `碰撞：${operatorA.definition.name} 造成 ${dealtToB} 碰撞伤害，${operatorB.definition.name} 造成 ${dealtToA} 碰撞伤害`,
     );
     this.checkWinner();
+  }
+
+  private getCollisionKey(a: OperatorRuntime, b: OperatorRuntime) {
+    return [a.body.label, b.body.label].sort().join("|");
   }
 
   private checkWinner() {
@@ -996,6 +1324,15 @@ export class Game {
   private render() {
     const snapshot = this.createSnapshot();
 
+    if (this.ui.canvas.width !== this.arenaSize) {
+      this.ui.canvas.width = this.arenaSize;
+      this.ui.canvas.height = this.arenaSize;
+    }
+    this.ui.canvas.style.setProperty("--arena-size", `${this.arenaSize}px`);
+    document.documentElement.style.setProperty(
+      "--arena-size",
+      `${this.arenaSize}px`,
+    );
     renderArena(this.ui.canvas, snapshot);
     this.ui.updateStatus(snapshot);
   }
@@ -1006,8 +1343,13 @@ export class Game {
     }
 
     return {
+      arenaSize: this.arenaSize,
       left: this.createOperatorSnapshot(this.left),
       right: this.createOperatorSnapshot(this.right),
+      summons: this.summons
+        .filter((summon) => summon.runtime.isAlive && !summon.removedFromWorld)
+        .map((summon) => this.createOperatorSnapshot(summon.runtime)),
+      summonStatuses: this.createSummonStatusSnapshots(),
       damageNumbers: this.damageNumbers,
       projectiles: this.projectiles,
       battleCast: this.battleCast,
@@ -1015,6 +1357,16 @@ export class Game {
       running: this.running,
       winnerName: this.winnerName,
     };
+  }
+
+  private createSummonStatusSnapshots() {
+    return this.summons.map((summon) => ({
+      ownerSide: summon.ownerSide,
+      name: summon.runtime.definition.name,
+      isAlive: summon.runtime.isAlive,
+      isDeployed: !summon.removedFromWorld && summon.runtime.isAlive,
+      redeployRemaining: Math.max(0, summon.redeployTimer),
+    }));
   }
 
   private createOperatorSnapshot(
@@ -1030,6 +1382,7 @@ export class Game {
       englishName: operator.definition.englishName,
       role: operator.definition.role,
       attackMode: operator.definition.attackMode,
+      isSummon: operator.definition.isSummon,
       hp: operator.currentHp,
       maxHp: operator.maxHp,
       sp: operator.displayedSp,
@@ -1120,8 +1473,8 @@ export class Game {
     if (this.setupDrag.mode === "move") {
       const radius = operator.definition.radius;
       operator.setPosition(
-        Math.max(radius, Math.min(arenaSize - radius, point.x)),
-        Math.max(radius, Math.min(arenaSize - radius, point.y)),
+        Math.max(radius, Math.min(this.arenaSize - radius, point.x)),
+        Math.max(radius, Math.min(this.arenaSize - radius, point.y)),
       );
       return;
     }
@@ -1226,6 +1579,16 @@ interface ActiveRepeatedStrike {
   remainingHits: number;
   timer: number;
   totalDamage: number;
+}
+
+type BattleSide = "left" | "right";
+
+interface SummonRuntime {
+  owner: OperatorRuntime;
+  ownerSide: BattleSide;
+  runtime: OperatorRuntime;
+  redeployTimer: number;
+  removedFromWorld: boolean;
 }
 
 interface OperatorSetupState {

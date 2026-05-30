@@ -91,7 +91,7 @@ select {
 
 .battle-layout {
   display: grid;
-  grid-template-columns: 260px minmax(320px, 648px) 260px;
+  grid-template-columns: 260px minmax(320px, var(--arena-size, 648px)) 260px;
   justify-content: center;
   align-items: start;
   gap: 18px;
@@ -327,6 +327,15 @@ select {
 .speed-group {
   display: flex;
   gap: 6px;
+}
+
+.arena-size-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #bfccdd;
+  font-size: 13px;
+  font-weight: 700;
 }
 
 .speed-button {

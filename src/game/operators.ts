@@ -1,5 +1,30 @@
 import type { OperatorDefinition, OperatorRole } from "./types";
 
+const rangeTileSize = 60;
+
+export const phantomMirrorDefinition: OperatorDefinition = {
+  id: "phantomMirror",
+  name: "镜中虚影",
+  englishName: "The Mirror",
+  role: "specialist",
+  attackMode: "melee",
+  isSummon: true,
+  summonOf: "phantom",
+  maxHp: 14160,
+  attack: 548,
+  defense: 268,
+  resistance: 0,
+  damageType: "physical",
+  attackInterval: 0.93,
+  attackRangeId: "forwardShort",
+  rangeTileSize,
+  radius: 25,
+  speed: 200,
+  spRegen: 0,
+  spRecoveryType: "natural",
+  skillId: "phantomNightPhantom",
+};
+
 export const roleLabels: Record<OperatorRole, string> = {
   guard: "近卫",
   defender: "重装",
@@ -32,7 +57,7 @@ export const operators: OperatorDefinition[] = [
     damageType: "arts",
     attackInterval: 1.6,
     attackRangeId: "amiyaDefault",
-    rangeTileSize: 54,
+    rangeTileSize,
     radius: 30,
     speed: 200,
     spRegen: 1,
@@ -52,7 +77,7 @@ export const operators: OperatorDefinition[] = [
     damageType: "physical",
     attackInterval: 1.3,
     attackRangeId: "chenDefault",
-    rangeTileSize: 66,
+    rangeTileSize,
     radius: 31,
     speed: 200,
     spRegen: 0,
@@ -75,7 +100,7 @@ export const operators: OperatorDefinition[] = [
     damageType: "physical",
     attackInterval: 1.2,
     attackRangeId: "hoshigumaDefault",
-    rangeTileSize: 64,
+    rangeTileSize,
     radius: 34,
     speed: 200,
     spRegen: 1,
@@ -97,7 +122,7 @@ export const operators: OperatorDefinition[] = [
     damageType: "physical",
     attackInterval: 1,
     attackRangeId: "exusiaiDefault",
-    rangeTileSize: 56,
+    rangeTileSize,
     radius: 27,
     speed: 200,
     spRegen: 1,
@@ -120,7 +145,7 @@ export const operators: OperatorDefinition[] = [
     damageType: "physical",
     attackInterval: 1.2,
     attackRangeId: "sariaDefault",
-    rangeTileSize: 64,
+    rangeTileSize,
     radius: 33,
     speed: 200,
     spRegen: 1,
@@ -129,22 +154,23 @@ export const operators: OperatorDefinition[] = [
   },
   {
     id: "phantom",
+    englishName: "Phantom",
     name: "傀影",
     role: "specialist",
     attackMode: "melee",
-    maxHp: 1260,
-    attack: 91,
-    defense: 24,
+    maxHp: 16450,
+    attack: 558,
+    defense: 322,
     resistance: 0,
     damageType: "physical",
-    attackInterval: 1.1,
+    attackInterval: 0.93,
     attackRangeId: "forwardShort",
-    rangeTileSize: 64,
+    rangeTileSize,
     radius: 28,
     speed: 200,
-    spRegen: 20,
+    spRegen: 0,
     spRecoveryType: "natural",
-    skillId: "shadowPush",
+    skillId: "phantomNightPhantom",
   },
 ];
 
@@ -153,7 +179,8 @@ for (const operator of operators) {
     operator.id !== "chen" &&
     operator.id !== "exusiai" &&
     operator.id !== "saria" &&
-    operator.id !== "hoshiguma"
+    operator.id !== "hoshiguma" &&
+    operator.id !== "phantom"
   ) {
     operator.maxHp *= 10;
   }
