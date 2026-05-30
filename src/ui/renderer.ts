@@ -1,5 +1,5 @@
 import type { BattleSnapshot, OperatorSnapshot } from "../game/types";
-import { attackRanges, orientCell } from "../game/ranges";
+import { displayCellsByRange, getRangeCellCenter } from "../game/ranges";
 
 const arenaSize = 720;
 
@@ -102,7 +102,7 @@ function drawAttackRange(
     return;
   }
 
-  const cells = attackRanges[operator.attackRangeId];
+  const cells = displayCellsByRange[operator.attackRangeId];
   const tileSize = operator.rangeTileSize;
 
   ctx.save();
@@ -117,12 +117,21 @@ function drawAttackRange(
   ctx.lineWidth = 2;
 
   for (const cell of cells) {
-    const oriented = orientCell(cell, operator.facingDirection);
-    const cornerX = operator.x + oriented.x * tileSize;
-    const cornerY = operator.y + oriented.y * tileSize;
+    const center = getRangeCellCenter(
+      operator.x,
+      operator.y,
+      operator.facingAngle,
+      operator.attackRangeId,
+      cell,
+      tileSize,
+    );
 
-    ctx.fillRect(cornerX, cornerY, tileSize, tileSize);
-    ctx.strokeRect(cornerX, cornerY, tileSize, tileSize);
+    ctx.save();
+    ctx.translate(center.x, center.y);
+    ctx.rotate(operator.facingAngle);
+    ctx.fillRect(-tileSize / 2, -tileSize / 2, tileSize, tileSize);
+    ctx.strokeRect(-tileSize / 2, -tileSize / 2, tileSize, tileSize);
+    ctx.restore();
   }
 
   ctx.restore();

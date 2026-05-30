@@ -1,22 +1,28 @@
-import type { AttackRangeId, FacingDirection } from "./types";
+import type { AttackRangeId } from "./types";
 
 export interface RangeCell {
   x: number;
   y: number;
 }
 
-export const attackRanges: Record<AttackRangeId, RangeCell[]> = {
+export const operatorCellByRange: Record<AttackRangeId, RangeCell> = {
+  amiyaDefault: { x: 0, y: 0 },
+  amiyaChimera: { x: 0, y: 0 },
+  forwardShort: { x: 0, y: 0 },
+  forwardWide: { x: 0, y: 0 },
+};
+
+export const attackCellsByRange: Record<AttackRangeId, RangeCell[]> = {
   amiyaDefault: [
+    { x: 0, y: -1 },
     { x: 1, y: -1 },
     { x: 2, y: -1 },
-    { x: 3, y: -1 },
     { x: 1, y: 0 },
     { x: 2, y: 0 },
     { x: 3, y: 0 },
-    { x: 4, y: 0 },
+    { x: 0, y: 1 },
     { x: 1, y: 1 },
     { x: 2, y: 1 },
-    { x: 3, y: 1 },
   ],
   amiyaChimera: [
     { x: 1, y: -2 },
@@ -53,26 +59,49 @@ export const attackRanges: Record<AttackRangeId, RangeCell[]> = {
   ],
 };
 
+export const displayCellsByRange: Record<AttackRangeId, RangeCell[]> = {
+  amiyaDefault: [
+    ...attackCellsByRange.amiyaDefault,
+    operatorCellByRange.amiyaDefault,
+  ],
+  amiyaChimera: [
+    ...attackCellsByRange.amiyaChimera,
+    operatorCellByRange.amiyaChimera,
+  ],
+  forwardShort: [
+    ...attackCellsByRange.forwardShort,
+    operatorCellByRange.forwardShort,
+  ],
+  forwardWide: [
+    ...attackCellsByRange.forwardWide,
+    operatorCellByRange.forwardWide,
+  ],
+};
+
 export function isPointInAttackRange(
   attacker: {
     x: number;
     y: number;
-    facingDirection: FacingDirection;
+    facingAngle: number;
     attackRangeId: AttackRangeId;
     rangeTileSize: number;
   },
   target: { x: number; y: number; radius: number },
 ) {
-  const cells = attackRanges[attacker.attackRangeId];
   const tileSize = attacker.rangeTileSize;
+  const half = tileSize / 2;
 
-  for (const cell of cells) {
-    const oriented = orientCell(cell, attacker.facingDirection);
-    const centerX = attacker.x + (oriented.x + 0.5) * tileSize;
-    const centerY = attacker.y + (oriented.y + 0.5) * tileSize;
-    const half = tileSize / 2;
-    const distanceX = Math.abs(target.x - centerX);
-    const distanceY = Math.abs(target.y - centerY);
+  for (const cell of attackCellsByRange[attacker.attackRangeId]) {
+    const center = getRangeCellCenter(
+      attacker.x,
+      attacker.y,
+      attacker.facingAngle,
+      attacker.attackRangeId,
+      cell,
+      tileSize,
+    );
+    const distanceX = Math.abs(target.x - center.x);
+    const distanceY = Math.abs(target.y - center.y);
 
     if (distanceX <= half + target.radius && distanceY <= half + target.radius) {
       return true;
@@ -82,18 +111,22 @@ export function isPointInAttackRange(
   return false;
 }
 
-export function orientCell(cell: RangeCell, direction: FacingDirection) {
-  if (direction === "right") {
-    return cell;
-  }
+export function getRangeCellCenter(
+  originX: number,
+  originY: number,
+  facingAngle: number,
+  rangeId: AttackRangeId,
+  cell: RangeCell,
+  tileSize: number,
+) {
+  const operatorCell = operatorCellByRange[rangeId];
+  const localX = (cell.x - operatorCell.x) * tileSize;
+  const localY = (cell.y - operatorCell.y) * tileSize;
+  const cos = Math.cos(facingAngle);
+  const sin = Math.sin(facingAngle);
 
-  if (direction === "down") {
-    return { x: -cell.y - 1, y: cell.x };
-  }
-
-  if (direction === "left") {
-    return { x: -cell.x - 1, y: -cell.y - 1 };
-  }
-
-  return { x: cell.y, y: -cell.x - 1 };
+  return {
+    x: originX + localX * cos - localY * sin,
+    y: originY + localX * sin + localY * cos,
+  };
 }

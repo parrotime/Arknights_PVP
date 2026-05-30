@@ -2,6 +2,19 @@ import { Body, Vector } from "matter-js";
 import type { SkillDefinition } from "./types";
 
 export const skills: Record<string, SkillDefinition> = {
+  tacticalChant: {
+    id: "tacticalChant",
+    name: "战术咏唱·γ型",
+    description: "30 秒内攻击速度 +60",
+    initialSp: 10,
+    maxSp: 32,
+    duration: 30,
+    activate: ({ self, log }) => {
+      self.addBuff({ type: "attackInterval", value: 0.625, duration: 30 });
+      log(`${self.definition.name} 开启战术咏唱，攻击速度提升`);
+    },
+  },
+
   spiritBurst: {
     id: "spiritBurst",
     name: "精神爆发",

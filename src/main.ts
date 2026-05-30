@@ -21,8 +21,16 @@ app.innerHTML = `
           <select id="left-operator"></select>
         </label>
         <label>
+          蓝方技能
+          <select id="left-skill"></select>
+        </label>
+        <label>
           红方
           <select id="right-operator"></select>
+        </label>
+        <label>
+          红方技能
+          <select id="right-skill"></select>
         </label>
       </div>
     </section>

@@ -3,12 +3,15 @@ import type {
   BattleUi,
   OperatorDefinition,
   OperatorSnapshot,
+  SkillDefinition,
 } from "../game/types";
 
 export function createBattleUi(): BattleUi {
   const canvas = getElement<HTMLCanvasElement>("arena");
   const leftSelect = getElement<HTMLSelectElement>("left-operator");
   const rightSelect = getElement<HTMLSelectElement>("right-operator");
+  const leftSkillSelect = getElement<HTMLSelectElement>("left-skill");
+  const rightSkillSelect = getElement<HTMLSelectElement>("right-skill");
   const startButton = getElement<HTMLButtonElement>("start-button");
   const pauseButton = getElement<HTMLButtonElement>("pause-button");
   const restartButton = getElement<HTMLButtonElement>("restart-button");
@@ -24,6 +27,8 @@ export function createBattleUi(): BattleUi {
     canvas,
     leftSelect,
     rightSelect,
+    leftSkillSelect,
+    rightSkillSelect,
     startButton,
     pauseButton,
     restartButton,
@@ -32,6 +37,10 @@ export function createBattleUi(): BattleUi {
     setOperatorOptions: (operators, leftId, rightId) => {
       fillSelect(leftSelect, operators, leftId);
       fillSelect(rightSelect, operators, rightId);
+    },
+    setSkillOptions: (leftSkills, rightSkills, leftSkillId, rightSkillId) => {
+      fillSkillSelect(leftSkillSelect, leftSkills, leftSkillId);
+      fillSkillSelect(rightSkillSelect, rightSkills, rightSkillId);
     },
     updateStatus: (snapshot) => {
       leftStatus.innerHTML = renderStatusCard(snapshot.left);
@@ -87,6 +96,24 @@ function fillSelect(
   }
 
   select.value = selectedId || currentValue;
+}
+
+function fillSkillSelect(
+  select: HTMLSelectElement,
+  skills: SkillDefinition[],
+  selectedId: string,
+) {
+  const optionsKey = skills.map((skill) => skill.id).join("|");
+
+  if (select.dataset.optionsKey !== optionsKey) {
+    select.innerHTML = skills
+      .map((skill) => `<option value="${skill.id}">${skill.name}</option>`)
+      .join("");
+    select.dataset.optionsKey = optionsKey;
+  }
+
+  select.disabled = skills.length <= 1;
+  select.value = selectedId;
 }
 
 function renderStatusCard(operator: OperatorSnapshot) {

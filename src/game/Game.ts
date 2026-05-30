@@ -8,7 +8,6 @@ import type {
   BattleSnapshot,
   BattleUi,
   DamageType,
-  FacingDirection,
   FloatingDamageSnapshot,
   OperatorDefinition,
   OperatorSnapshot,
@@ -36,6 +35,8 @@ export class Game {
   private speedMultiplier = 1;
   private leftId = "amiya";
   private rightId = "chen";
+  private leftSkillId = "chimera";
+  private rightSkillId = "chiXiao";
   private damageNumbers: FloatingDamageSnapshot[] = [];
   private nextDamageNumberId = 1;
 
@@ -45,6 +46,7 @@ export class Game {
 
   mount() {
     this.ui.setOperatorOptions(operators, this.leftId, this.rightId);
+    this.syncSkillOptions();
     this.bindEvents();
     this.resetBattle();
     this.lastFrameTime = performance.now();
@@ -75,8 +77,10 @@ export class Game {
 
       if (this.leftId === this.rightId) {
         this.rightId = this.pickAlternativeOperator(this.leftId);
+        this.rightSkillId = this.getOperator(this.rightId).skillId;
       }
 
+      this.leftSkillId = this.getOperator(this.leftId).skillId;
       this.resetBattle();
     });
 
@@ -85,8 +89,20 @@ export class Game {
 
       if (this.leftId === this.rightId) {
         this.leftId = this.pickAlternativeOperator(this.rightId);
+        this.leftSkillId = this.getOperator(this.leftId).skillId;
       }
 
+      this.rightSkillId = this.getOperator(this.rightId).skillId;
+      this.resetBattle();
+    });
+
+    this.ui.leftSkillSelect.addEventListener("change", () => {
+      this.leftSkillId = this.ui.leftSkillSelect.value;
+      this.resetBattle();
+    });
+
+    this.ui.rightSkillSelect.addEventListener("change", () => {
+      this.rightSkillId = this.ui.rightSkillSelect.value;
       this.resetBattle();
     });
 
@@ -126,12 +142,12 @@ export class Game {
 
     this.left = new OperatorRuntime(
       leftDefinition,
-      this.getSkill(leftDefinition.skillId),
+      this.getSkill(this.leftSkillId),
       this.physics.leftBody,
     );
     this.right = new OperatorRuntime(
       rightDefinition,
-      this.getSkill(rightDefinition.skillId),
+      this.getSkill(this.rightSkillId),
       this.physics.rightBody,
     );
 
@@ -139,6 +155,7 @@ export class Game {
     this.right.applySpeedToBody();
     this.ui.pauseButton.textContent = "暂停";
     this.ui.setOperatorOptions(operators, this.leftId, this.rightId);
+    this.syncSkillOptions();
     this.ui.clearLog();
     this.ui.addLog(`${leftDefinition.name} vs ${rightDefinition.name}，战斗准备完成`);
     this.render();
@@ -162,6 +179,35 @@ export class Game {
     }
 
     return skill;
+  }
+
+  private getSelectableSkills(operatorId: string) {
+    if (operatorId === "amiya") {
+      return [skills.tacticalChant, skills.spiritBurst, skills.chimera];
+    }
+
+    const operator = this.getOperator(operatorId);
+    return [this.getSkill(operator.skillId)];
+  }
+
+  private syncSkillOptions() {
+    const leftSkills = this.getSelectableSkills(this.leftId);
+    const rightSkills = this.getSelectableSkills(this.rightId);
+
+    if (!leftSkills.some((skill) => skill.id === this.leftSkillId)) {
+      this.leftSkillId = leftSkills[0].id;
+    }
+
+    if (!rightSkills.some((skill) => skill.id === this.rightSkillId)) {
+      this.rightSkillId = rightSkills[0].id;
+    }
+
+    this.ui.setSkillOptions(
+      leftSkills,
+      rightSkills,
+      this.leftSkillId,
+      this.rightSkillId,
+    );
   }
 
   private loop = (time: number) => {
@@ -281,7 +327,7 @@ export class Game {
       {
         x: self.body.position.x,
         y: self.body.position.y,
-        facingDirection: this.getFacingDirection(self, enemy),
+        facingAngle: this.getFacingAngle(self),
         attackRangeId: self.attackRangeId,
         rangeTileSize: self.rangeTileSize,
       },
@@ -293,18 +339,14 @@ export class Game {
     );
   }
 
-  private getFacingDirection(
-    self: OperatorRuntime,
-    enemy: OperatorRuntime,
-  ): FacingDirection {
-    const deltaX = enemy.body.position.x - self.body.position.x;
-    const deltaY = enemy.body.position.y - self.body.position.y;
+  private getFacingAngle(self: OperatorRuntime) {
+    const velocity = self.body.velocity;
 
-    if (Math.abs(deltaX) >= Math.abs(deltaY)) {
-      return deltaX >= 0 ? "right" : "left";
+    if (Math.hypot(velocity.x, velocity.y) < 0.001) {
+      return 0;
     }
 
-    return deltaY >= 0 ? "down" : "up";
+    return Math.atan2(velocity.y, velocity.x);
   }
 
   private dealDamage(
@@ -439,8 +481,6 @@ export class Game {
       throw new Error("Battle is not initialized.");
     }
 
-    const enemy = operator === this.left ? this.right : this.left;
-
     return {
       id: operator.definition.id,
       name: operator.definition.name,
@@ -458,7 +498,7 @@ export class Game {
       isAlive: operator.isAlive,
       hasShield: operator.hasShield,
       isStunned: operator.isStunned,
-      facingDirection: this.getFacingDirection(operator, enemy),
+      facingAngle: this.getFacingAngle(operator),
       attackRangeId: operator.attackRangeId,
       rangeTileSize: operator.rangeTileSize,
     };

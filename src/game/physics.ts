@@ -64,7 +64,7 @@ export function createPhysicsWorld(
 
   Composite.add(engine.world, [leftBody, rightBody, ...walls]);
   Body.setVelocity(leftBody, { x: 3.5, y: -2.8 });
-  Body.setVelocity(rightBody, { x: -3.2, y: 3.1 });
+  Body.setVelocity(rightBody, { x: 3.2, y: 3.1 });
 
   const collisionHandler = (event: IEventCollision<Engine>) => {
     for (const pair of event.pairs) {

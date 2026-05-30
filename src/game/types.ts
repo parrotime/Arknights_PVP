@@ -16,8 +16,6 @@ export type AttackRangeId =
   | "forwardShort"
   | "forwardWide";
 
-export type FacingDirection = "right" | "down" | "left" | "up";
-
 export type BuffType =
   | "speed"
   | "damageReduction"
@@ -121,7 +119,7 @@ export interface OperatorSnapshot {
   isAlive: boolean;
   hasShield: boolean;
   isStunned: boolean;
-  facingDirection: FacingDirection;
+  facingAngle: number;
   attackRangeId: AttackRangeId;
   rangeTileSize: number;
 }
@@ -148,6 +146,8 @@ export interface BattleUi {
   canvas: HTMLCanvasElement;
   leftSelect: HTMLSelectElement;
   rightSelect: HTMLSelectElement;
+  leftSkillSelect: HTMLSelectElement;
+  rightSkillSelect: HTMLSelectElement;
   startButton: HTMLButtonElement;
   pauseButton: HTMLButtonElement;
   restartButton: HTMLButtonElement;
@@ -158,6 +158,12 @@ export interface BattleUi {
     operators: OperatorDefinition[],
     leftId: string,
     rightId: string,
+  ) => void;
+  setSkillOptions: (
+    leftSkills: SkillDefinition[],
+    rightSkills: SkillDefinition[],
+    leftSkillId: string,
+    rightSkillId: string,
   ) => void;
   addLog: (message: string) => void;
   clearLog: () => void;
