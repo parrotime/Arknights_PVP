@@ -119,9 +119,11 @@ export interface OperatorRuntimeLike {
   displayRangeId: AttackRangeId;
   rangeTileSize: number;
   isStunned: boolean;
+  isSkillActive: boolean;
   multiHit: { hits: number; multiplier: number } | null;
   addBuff: (buff: Buff) => void;
   showSkillRange: (rangeId: AttackRangeId, duration: number) => void;
+  startSkillCooldown: (duration: number) => void;
   gainSp: (amount: number) => void;
   spendSp: (amount: number) => void;
   takeDamage: (amount: number, type: DamageType) => number;

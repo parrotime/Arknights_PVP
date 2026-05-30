@@ -271,7 +271,12 @@ export class Game {
     self: OperatorRuntime,
     enemy: OperatorRuntime,
   ) {
-    if (!self.isAlive || !enemy.isAlive || self.currentSp < self.skill.maxSp) {
+    if (
+      !self.isAlive ||
+      !enemy.isAlive ||
+      self.isSkillActive ||
+      self.currentSp < self.skill.maxSp
+    ) {
       return;
     }
 
@@ -279,7 +284,7 @@ export class Game {
       return;
     }
 
-    self.resetSkill();
+    self.startSkillCooldown(self.skill.duration ?? 0);
     this.showSkillRange(self);
     self.skill.activate({
       self,
@@ -655,7 +660,7 @@ export class Game {
       role: operator.definition.role,
       hp: operator.currentHp,
       maxHp: operator.maxHp,
-      sp: operator.currentSp,
+      sp: operator.displayedSp,
       maxSp: operator.skill.maxSp,
       attack: operator.attack,
       defense: operator.defense,

@@ -17,6 +17,7 @@ export class OperatorRuntime {
   private buffs: Buff[] = [];
   private skillRangeDisplay: { rangeId: AttackRangeId; duration: number } | null =
     null;
+  private activeSkill: { duration: number; remaining: number } | null = null;
 
   constructor(
     definition: OperatorDefinition,
@@ -88,6 +89,21 @@ export class OperatorRuntime {
     return this.skillRangeDisplay?.rangeId ?? this.attackRangeId;
   }
 
+  get displayedSp() {
+    if (!this.activeSkill) {
+      return this.currentSp;
+    }
+
+    return (
+      this.skill.maxSp *
+      Math.max(0, this.activeSkill.remaining / this.activeSkill.duration)
+    );
+  }
+
+  get isSkillActive() {
+    return Boolean(this.activeSkill);
+  }
+
   get rangeTileSize() {
     return this.definition.rangeTileSize;
   }
@@ -134,6 +150,12 @@ export class OperatorRuntime {
           : null;
     }
 
+    if (this.activeSkill) {
+      const remaining = this.activeSkill.remaining - deltaSeconds;
+      this.activeSkill =
+        remaining > 0 ? { ...this.activeSkill, remaining } : null;
+    }
+
     for (const buff of expiring) {
       if (buff.stunAfterExpire) {
         this.addBuff({ type: "stun", value: 1, duration: buff.stunAfterExpire });
@@ -144,7 +166,7 @@ export class OperatorRuntime {
   }
 
   chargeSkill(deltaSeconds: number) {
-    if (!this.isAlive) {
+    if (!this.isAlive || this.activeSkill) {
       return;
     }
 
@@ -159,7 +181,7 @@ export class OperatorRuntime {
   }
 
   gainSp(amount: number) {
-    if (!this.isAlive) {
+    if (!this.isAlive || this.activeSkill) {
       return;
     }
 
@@ -194,6 +216,20 @@ export class OperatorRuntime {
     this.skillRangeDisplay = {
       rangeId,
       duration,
+    };
+  }
+
+  startSkillCooldown(duration: number) {
+    this.currentSp = 0;
+
+    if (duration <= 0) {
+      this.activeSkill = null;
+      return;
+    }
+
+    this.activeSkill = {
+      duration,
+      remaining: duration,
     };
   }
 
