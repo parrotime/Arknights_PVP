@@ -3,3 +3,5 @@ dist/
 .npm-cache/
 .env
 .env.local
+
+./Operators_skill.md

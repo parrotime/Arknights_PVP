@@ -122,6 +122,7 @@ function renderStatusCard(operator: OperatorSnapshot) {
       <div class="skill-name">
         <strong>${operator.skillName}</strong><br />
         ${operator.skillDescription}
+        ${operator.isStunned ? '<div class="state-line">晕眩中</div>' : ""}
       </div>
     </article>
   `;

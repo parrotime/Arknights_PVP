@@ -1,4 +1,5 @@
 import type { BattleSnapshot, OperatorSnapshot } from "../game/types";
+import { attackRanges } from "../game/ranges";
 
 const arenaSize = 720;
 
@@ -14,6 +15,8 @@ export function renderArena(
 
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   drawArenaBackground(ctx);
+  drawAttackRange(ctx, snapshot.left);
+  drawAttackRange(ctx, snapshot.right);
   drawOperator(ctx, snapshot.left);
   drawOperator(ctx, snapshot.right);
   drawCenterInfo(ctx, snapshot);
@@ -62,6 +65,16 @@ function drawOperator(
     ctx.stroke();
   }
 
+  if (operator.isStunned) {
+    ctx.beginPath();
+    ctx.arc(0, 0, operator.radius + 13, 0, Math.PI * 2);
+    ctx.strokeStyle = "rgb(255 229 122 / 0.9)";
+    ctx.lineWidth = 4;
+    ctx.setLineDash([8, 6]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
   ctx.beginPath();
   ctx.arc(0, 0, operator.radius, 0, Math.PI * 2);
   ctx.fillStyle = operator.isAlive ? operator.color : "#566070";
@@ -77,6 +90,47 @@ function drawOperator(
   ctx.fillText(operator.name, 0, 0, operator.radius * 1.65);
 
   drawMiniBars(ctx, operator);
+  ctx.restore();
+}
+
+function drawAttackRange(
+  ctx: CanvasRenderingContext2D,
+  operator: OperatorSnapshot,
+) {
+  if (!operator.isAlive) {
+    return;
+  }
+
+  const cells = attackRanges[operator.attackRangeId];
+  const cos = Math.cos(operator.facingAngle);
+  const sin = Math.sin(operator.facingAngle);
+  const tileSize = operator.rangeTileSize;
+
+  ctx.save();
+  ctx.fillStyle =
+    operator.attackRangeId === "amiyaChimera"
+      ? "rgb(255 255 255 / 0.16)"
+      : "rgb(255 255 255 / 0.09)";
+  ctx.strokeStyle =
+    operator.attackRangeId === "amiyaChimera"
+      ? "rgb(255 255 255 / 0.4)"
+      : "rgb(255 255 255 / 0.24)";
+  ctx.lineWidth = 1;
+
+  for (const cell of cells) {
+    const localX = cell.x * tileSize;
+    const localY = cell.y * tileSize;
+    const cornerX = operator.x + localX * cos - localY * sin;
+    const cornerY = operator.y + localX * sin + localY * cos;
+
+    ctx.save();
+    ctx.translate(cornerX, cornerY);
+    ctx.rotate(operator.facingAngle);
+    ctx.fillRect(0, 0, tileSize, tileSize);
+    ctx.strokeRect(0, 0, tileSize, tileSize);
+    ctx.restore();
+  }
+
   ctx.restore();
 }
 

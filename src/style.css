@@ -210,6 +210,12 @@ select {
   line-height: 1.5;
 }
 
+.state-line {
+  margin-top: 6px;
+  color: #ffd76b;
+  font-weight: 800;
+}
+
 .controls {
   display: flex;
   justify-content: center;

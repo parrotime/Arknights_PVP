@@ -10,12 +10,31 @@ export type OperatorRole =
 
 export type DamageType = "physical" | "arts" | "true";
 
-export type BuffType = "speed" | "damageReduction" | "attack";
+export type AttackRangeId =
+  | "amiyaDefault"
+  | "amiyaChimera"
+  | "forwardShort"
+  | "forwardWide";
+
+export type BuffType =
+  | "speed"
+  | "damageReduction"
+  | "attack"
+  | "attackInterval"
+  | "maxHp"
+  | "rangeOverride"
+  | "damageTypeOverride"
+  | "stun"
+  | "multiHit";
 
 export interface Buff {
   type: BuffType;
   value: number;
   duration: number;
+  rangeId?: AttackRangeId;
+  damageType?: DamageType;
+  hits?: number;
+  stunAfterExpire?: number;
 }
 
 export interface OperatorDefinition {
@@ -25,6 +44,11 @@ export interface OperatorDefinition {
   maxHp: number;
   attack: number;
   defense: number;
+  resistance: number;
+  damageType: DamageType;
+  attackInterval: number;
+  attackRangeId: AttackRangeId;
+  rangeTileSize: number;
   radius: number;
   speed: number;
   spRegen: number;
@@ -35,13 +59,21 @@ export interface SkillContext {
   self: OperatorRuntimeLike;
   enemy: OperatorRuntimeLike;
   log: (message: string) => void;
+  dealDamage: (
+    attacker: OperatorRuntimeLike,
+    defender: OperatorRuntimeLike,
+    rawAmount: number,
+    type: DamageType,
+  ) => number;
 }
 
 export interface SkillDefinition {
   id: string;
   name: string;
   description: string;
+  initialSp: number;
   maxSp: number;
+  duration?: number;
   activate: (ctx: SkillContext) => void;
 }
 
@@ -51,11 +83,22 @@ export interface OperatorRuntimeLike {
   currentHp: number;
   currentSp: number;
   isAlive: boolean;
+  maxHp: number;
   attack: number;
   defense: number;
+  resistance: number;
   speed: number;
+  damageType: DamageType;
+  attackInterval: number;
+  attackRangeId: AttackRangeId;
+  rangeTileSize: number;
+  isStunned: boolean;
+  multiHit: { hits: number; multiplier: number } | null;
   addBuff: (buff: Buff) => void;
+  gainSp: (amount: number) => void;
+  spendSp: (amount: number) => void;
   takeDamage: (amount: number, type: DamageType) => number;
+  takeAttack: (amount: number, type: DamageType) => number;
   heal: (amount: number) => number;
 }
 
@@ -75,6 +118,10 @@ export interface OperatorSnapshot {
   color: string;
   isAlive: boolean;
   hasShield: boolean;
+  isStunned: boolean;
+  facingAngle: number;
+  attackRangeId: AttackRangeId;
+  rangeTileSize: number;
 }
 
 export interface BattleSnapshot {
