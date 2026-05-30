@@ -11,11 +11,20 @@ export class OperatorRuntime {
   readonly definition: OperatorDefinition;
   readonly skill: SkillDefinition;
   readonly body: Body;
+  readonly speedVariation: number;
   currentHp: number;
   currentSp = 0;
   attackTimer = 0;
   manualFacingAngle: number | null = null;
+  lastFacingAngle = 0;
   expiredSkillId: string | null = null;
+  driftTimer = 1.5 + Math.random() * 1.5;
+  private preservedVelocity:
+    | { x: number; y: number }
+    | null = null;
+  private stunnedPosition:
+    | { x: number; y: number }
+    | null = null;
   private buffs: Buff[] = [];
   private skillRangeDisplay: { rangeId: AttackRangeId; duration: number } | null =
     null;
@@ -29,6 +38,7 @@ export class OperatorRuntime {
     this.definition = definition;
     this.skill = skill;
     this.body = body;
+    this.speedVariation = 0.975 + Math.random() * 0.05;
     this.currentHp = definition.maxHp;
     this.currentSp = Math.min(skill.initialSp, skill.maxSp);
   }
@@ -69,7 +79,7 @@ export class OperatorRuntime {
 
   get speed() {
     const speedBuff = this.buffs.find((buff) => buff.type === "speed");
-    return this.definition.speed * (speedBuff?.value ?? 1);
+    return this.definition.speed * this.speedVariation * (speedBuff?.value ?? 1);
   }
 
   get damageType() {
@@ -156,6 +166,7 @@ export class OperatorRuntime {
 
   update(deltaSeconds: number) {
     this.expiredSkillId = null;
+    const wasStunned = this.isStunned;
     const expiring = this.buffs.filter(
       (buff) => buff.duration > 0 && buff.duration - deltaSeconds <= 0,
     );
@@ -187,6 +198,14 @@ export class OperatorRuntime {
       if (buff.stunAfterExpire) {
         this.addBuff({ type: "stun", value: 1, duration: buff.stunAfterExpire });
       }
+    }
+
+    const isStunned = this.isStunned;
+
+    if (!wasStunned && isStunned) {
+      this.freezeMovement();
+    } else if (wasStunned && !isStunned) {
+      this.restoreMovement();
     }
 
     this.currentHp = Math.min(this.currentHp, this.maxHp);
@@ -222,6 +241,10 @@ export class OperatorRuntime {
   addBuff(buff: Buff) {
     if (buff.type === "stun" && this.buffs.some((current) => current.type === "stunImmune")) {
       return;
+    }
+
+    if (buff.type === "stun" && !this.isStunned) {
+      this.freezeMovement();
     }
 
     const existingIndex = this.buffs.findIndex(
@@ -319,6 +342,11 @@ export class OperatorRuntime {
   }
 
   applySpeedToBody() {
+    if (this.isStunned) {
+      this.holdStunnedPosition();
+      return;
+    }
+
     const velocity = this.body.velocity;
     const length = Math.hypot(velocity.x, velocity.y) || 1;
     const target = this.speed / 60;
@@ -335,6 +363,7 @@ export class OperatorRuntime {
 
   setFacingAngle(angle: number) {
     this.manualFacingAngle = angle;
+    this.lastFacingAngle = angle;
     const target = this.speed / 60;
 
     Body.setVelocity(this.body, {
@@ -344,6 +373,11 @@ export class OperatorRuntime {
   }
 
   keepInsideArena(arenaSize: number) {
+    if (this.isStunned) {
+      this.holdStunnedPosition();
+      return;
+    }
+
     const radius = this.definition.radius;
     const min = radius;
     const max = arenaSize - radius;
@@ -381,9 +415,91 @@ export class OperatorRuntime {
     const length = Math.hypot(velocityX, velocityY) || 1;
 
     Body.setPosition(this.body, { x, y });
+    this.setVelocityByDirection(velocityX / length, velocityY / length);
+    this.jitterVelocity(5);
+  }
+
+  updateDrift(deltaSeconds: number) {
+    if (!this.isAlive || this.isStunned) {
+      return;
+    }
+
+    this.driftTimer -= deltaSeconds;
+
+    if (this.driftTimer > 0) {
+      return;
+    }
+
+    this.jitterVelocity(5);
+    this.driftTimer = 1.5 + Math.random() * 1.5;
+  }
+
+  jitterVelocity(maxDegrees: number) {
+    if (this.isStunned) {
+      return;
+    }
+
+    const velocity = this.body.velocity;
+    const length = Math.hypot(velocity.x, velocity.y);
+
+    if (length < 0.001) {
+      return;
+    }
+
+    const angle =
+      Math.atan2(velocity.y, velocity.x) +
+      ((Math.random() * 2 - 1) * maxDegrees * Math.PI) / 180;
+
+    this.setVelocityByDirection(Math.cos(angle), Math.sin(angle));
+  }
+
+  private freezeMovement() {
+    const velocity = this.body.velocity;
+
+    if (Math.hypot(velocity.x, velocity.y) > 0.001) {
+      this.preservedVelocity = { x: velocity.x, y: velocity.y };
+    }
+
+    this.stunnedPosition = {
+      x: this.body.position.x,
+      y: this.body.position.y,
+    };
+    Body.setVelocity(this.body, { x: 0, y: 0 });
+  }
+
+  private restoreMovement() {
+    const velocity = this.preservedVelocity ?? {
+      x: Math.cos(this.manualFacingAngle ?? 0),
+      y: Math.sin(this.manualFacingAngle ?? 0),
+    };
+    const length = Math.hypot(velocity.x, velocity.y) || 1;
+    const target = this.speed / 60;
+
     Body.setVelocity(this.body, {
-      x: (velocityX / length) * target,
-      y: (velocityY / length) * target,
+      x: (velocity.x / length) * target,
+      y: (velocity.y / length) * target,
     });
+    this.lastFacingAngle = Math.atan2(velocity.y, velocity.x);
+    this.preservedVelocity = null;
+    this.stunnedPosition = null;
+  }
+
+  private holdStunnedPosition() {
+    if (this.stunnedPosition) {
+      Body.setPosition(this.body, this.stunnedPosition);
+    }
+
+    Body.setVelocity(this.body, { x: 0, y: 0 });
+  }
+
+  private setVelocityByDirection(x: number, y: number) {
+    const length = Math.hypot(x, y) || 1;
+    const target = this.speed / 60;
+
+    Body.setVelocity(this.body, {
+      x: (x / length) * target,
+      y: (y / length) * target,
+    });
+    this.lastFacingAngle = Math.atan2(y, x);
   }
 }

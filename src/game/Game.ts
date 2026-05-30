@@ -51,7 +51,7 @@ export class Game {
     null;
   private nextDamageNumberId = 1;
   private nextProjectileId = 1;
-  private chenTalentTimer = 0;
+  private chenTalentTimers = { left: 0, right: 0 };
   private repeatedStrikes: ActiveRepeatedStrike[] = [];
   private setupDrag:
     | { operator: OperatorRuntime; mode: "move" | "rotate"; pointerId: number }
@@ -140,7 +140,7 @@ export class Game {
     this.winnerName = null;
     this.elapsed = 0;
     this.collisionCooldown = 0;
-    this.chenTalentTimer = 0;
+    this.chenTalentTimers = { left: 0, right: 0 };
     this.repeatedStrikes = [];
     this.damageNumbers = [];
     this.projectiles = [];
@@ -296,6 +296,8 @@ export class Game {
     this.tryActivateSkill(this.right, this.left);
     this.updateBasicAttack(this.left, this.right, deltaSeconds);
     this.updateBasicAttack(this.right, this.left, deltaSeconds);
+    this.left.updateDrift(deltaSeconds);
+    this.right.updateDrift(deltaSeconds);
     this.left.applySpeedToBody();
     this.right.applySpeedToBody();
 
@@ -412,20 +414,28 @@ export class Game {
       return;
     }
 
-    const chen = [this.left, this.right].find(
-      (operator) => operator.definition.id === "chen" && operator.isAlive,
-    );
+    for (const { key, operator } of [
+      { key: "left" as const, operator: this.left },
+      { key: "right" as const, operator: this.right },
+    ]) {
+      if (operator.definition.id !== "chen" || !operator.isAlive) {
+        this.chenTalentTimers[key] = 0;
+        continue;
+      }
 
-    if (!chen) {
-      this.chenTalentTimer = 0;
-      return;
-    }
+      this.chenTalentTimers[key] += deltaSeconds;
 
-    this.chenTalentTimer += deltaSeconds;
+      while (this.chenTalentTimers[key] >= 4) {
+        this.chenTalentTimers[key] -= 4;
+        const previousSp = operator.currentSp;
+        operator.gainSp(1);
 
-    while (this.chenTalentTimer >= 4) {
-      this.chenTalentTimer -= 4;
-      chen.gainSp(1);
+        if (operator.currentSp > previousSp) {
+          this.addBattleLog(
+            `${operator.definition.name} 的天赋为自身回复 1 点技力`,
+          );
+        }
+      }
     }
   }
 
@@ -532,8 +542,6 @@ export class Game {
     enemy: OperatorRuntime,
     definition: RepeatedStrikeDefinition,
   ) {
-    self.addBuff({ type: "invincible", value: 1, duration: 1 });
-    self.addBuff({ type: "stunImmune", value: 1, duration: 1 });
     this.repeatedStrikes.push({
       self,
       enemy,
@@ -657,17 +665,18 @@ export class Game {
   }
 
   private getFacingAngle(self: OperatorRuntime) {
-    if (!this.running && self.manualFacingAngle !== null) {
+    if (!this.running && this.elapsed === 0 && self.manualFacingAngle !== null) {
       return self.manualFacingAngle;
     }
 
     const velocity = self.body.velocity;
 
     if (Math.hypot(velocity.x, velocity.y) < 0.001) {
-      return 0;
+      return self.lastFacingAngle;
     }
 
-    return Math.atan2(velocity.y, velocity.x);
+    self.lastFacingAngle = Math.atan2(velocity.y, velocity.x);
+    return self.lastFacingAngle;
   }
 
   private dealDamage(
@@ -782,6 +791,8 @@ export class Game {
       this.left,
       rightDamage,
     );
+    this.left.jitterVelocity(5);
+    this.right.jitterVelocity(5);
 
     this.collisionCooldown = collisionDamageCooldown;
     this.addBattleLog(

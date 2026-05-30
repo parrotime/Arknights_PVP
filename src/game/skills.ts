@@ -70,8 +70,6 @@ export const skills: Record<string, SkillDefinition> = {
     skillRangeId: "chenDefault",
     minimumRangeDisplayDuration: 1,
     activate: ({ self, enemy, log, dealDamage }) => {
-      self.addBuff({ type: "invincible", value: 1, duration: 0.25 });
-      self.addBuff({ type: "stunImmune", value: 1, duration: 0.25 });
       const dealt = dealDamage(self, enemy, self.attack * 2.6, "physical");
       enemy.addBuff({ type: "stun", value: 1, duration: 1.5 });
       log(`${self.definition.name} 发动鞘击，造成 ${dealt} 点物理伤害并晕眩目标`);
@@ -87,8 +85,6 @@ export const skills: Record<string, SkillDefinition> = {
     skillRangeId: "chenSkill2",
     minimumRangeDisplayDuration: 1,
     activate: ({ self, enemy, log, dealDamage }) => {
-      self.addBuff({ type: "invincible", value: 1, duration: 0.35 });
-      self.addBuff({ type: "stunImmune", value: 1, duration: 0.35 });
       const physical = dealDamage(self, enemy, self.attack * 4.1, "physical");
       const arts = dealDamage(self, enemy, self.attack * 4.1, "arts");
 
@@ -105,8 +101,8 @@ export const skills: Record<string, SkillDefinition> = {
     skillRangeId: "chenSkill3",
     minimumRangeDisplayDuration: 1,
     activate: ({ self, log, startRepeatedStrike }) => {
-      self.addBuff({ type: "invincible", value: 1, duration: 1 });
-      self.addBuff({ type: "stunImmune", value: 1, duration: 1 });
+      self.addBuff({ type: "invincible", value: 1, duration: 1.05 });
+      self.addBuff({ type: "stunImmune", value: 1, duration: 1.05 });
       startRepeatedStrike({
         rangeId: "chenSkill3",
         hits: 10,
