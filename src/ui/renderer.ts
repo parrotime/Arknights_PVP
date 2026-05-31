@@ -25,6 +25,7 @@ export function renderArena(
     drawOperator(ctx, summon);
   }
   drawDamageNumbers(ctx, snapshot);
+  drawSkillCasts(ctx, snapshot);
 }
 
 function drawArenaBackground(ctx: CanvasRenderingContext2D, arenaSize: number) {
@@ -246,4 +247,40 @@ function drawMiniBars(
   ctx.fillRect(x, y + 8, width, 5);
   ctx.fillStyle = operator.isSkillActive ? "#0d6f35" : "#65e874";
   ctx.fillRect(x, y + 8, width * spRatio, 5);
+}
+
+function drawSkillCasts(
+  ctx: CanvasRenderingContext2D,
+  snapshot: BattleSnapshot,
+) {
+  ctx.save();
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.font = "800 18px Inter, Microsoft YaHei, sans-serif";
+  ctx.lineWidth = 4;
+
+  for (const cast of snapshot.skillCasts) {
+    const progress = cast.age / cast.duration;
+    const fadeIn = Math.min(1, progress / 0.2);
+    const fadeOut = progress > 0.55 ? 1 - (progress - 0.55) / 0.45 : 1;
+    const alpha = Math.max(0, fadeIn * fadeOut);
+    const y = cast.y - progress * 28;
+
+    ctx.globalAlpha = alpha;
+    ctx.strokeStyle = "rgb(10 18 32 / 0.75)";
+    ctx.fillStyle = "#f4f7fb";
+    ctx.strokeText(cast.name, cast.x, y);
+    ctx.fillText(cast.name, cast.x, y);
+
+    const barWidth = 28;
+    const barY = y + 14;
+    ctx.strokeStyle = cast.color;
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.moveTo(cast.x - barWidth / 2, barY);
+    ctx.lineTo(cast.x + barWidth / 2, barY);
+    ctx.stroke();
+  }
+
+  ctx.restore();
 }

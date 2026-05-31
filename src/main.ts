@@ -22,20 +22,29 @@ app.innerHTML = `
         <div class="match-selectors">
           <label>
             蓝方干员
-            <select id="left-operator"></select>
+            <div class="selector-row">
+              <select id="left-operator"></select>
+              <button class="dice-button" id="left-operator-random" type="button" title="随机蓝方干员" aria-label="随机蓝方干员">🎲</button>
+            </div>
           </label>
           <label>
             蓝方技能
-            <select id="left-skill"></select>
+            <div class="selector-row">
+              <select id="left-skill"></select>
+              <button class="dice-button" id="left-skill-random" type="button" title="随机蓝方技能" aria-label="随机蓝方技能">🎲</button>
+            </div>
           </label>
         </div>
         <div class="status-panel" id="left-status"></div>
       </aside>
       <div class="arena-stack">
         <div class="battle-timer" id="battle-timer">0:00</div>
+        <div class="ticker-bar">
+          <div class="ticker-row" id="ticker-row-1"></div>
+          <div class="ticker-row" id="ticker-row-2"></div>
+        </div>
         <div class="arena-wrap">
           <canvas id="arena" width="648" height="648"></canvas>
-          <div class="battle-cast" id="battle-cast" hidden></div>
           <div class="result-banner" id="result-banner" hidden></div>
         </div>
       </div>
@@ -43,11 +52,17 @@ app.innerHTML = `
         <div class="match-selectors">
           <label>
             红方干员
-            <select id="right-operator"></select>
+            <div class="selector-row">
+              <select id="right-operator"></select>
+              <button class="dice-button" id="right-operator-random" type="button" title="随机红方干员" aria-label="随机红方干员">🎲</button>
+            </div>
           </label>
           <label>
             红方技能
-            <select id="right-skill"></select>
+            <div class="selector-row">
+              <select id="right-skill"></select>
+              <button class="dice-button" id="right-skill-random" type="button" title="随机红方技能" aria-label="随机红方技能">🎲</button>
+            </div>
           </label>
         </div>
         <div class="status-panel" id="right-status"></div>
@@ -58,14 +73,18 @@ app.innerHTML = `
       <button id="start-button" type="button">开始</button>
       <button id="pause-button" type="button">暂停</button>
       <button id="restart-button" type="button">重开</button>
+      <button class="dice-button wide-dice-button" id="setup-random" type="button" title="随机双方站位和朝向" aria-label="随机双方站位和朝向">🎲 站位</button>
       <label class="arena-size-control">
         场地
-        <select id="arena-size">
-          <option value="350">350 × 350</option>
-          <option value="500">500 × 500</option>
-          <option value="648" selected>648 × 648</option>
-          <option value="800">800 × 800</option>
-        </select>
+        <div class="selector-row">
+          <select id="arena-size">
+            <option value="350">350 x 350</option>
+            <option value="500">500 x 500</option>
+            <option value="648" selected>648 x 648</option>
+            <option value="800">800 x 800</option>
+          </select>
+          <button class="dice-button" id="arena-size-random" type="button" title="随机场地大小" aria-label="随机场地大小">🎲</button>
+        </div>
       </label>
       <div class="speed-group" aria-label="战斗速度">
         <button class="speed-button active" data-speed="1" type="button">x1</button>

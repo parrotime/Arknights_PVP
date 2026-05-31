@@ -18,16 +18,21 @@ import type {
   OperatorRuntimeLike,
   ProjectileSnapshot,
   RepeatedStrikeDefinition,
+  SkillCastSnapshot,
+  TickerMessage,
+  TickerMessageLevel,
 } from "./types";
 import { renderArena } from "../ui/renderer";
 
 const defaultArenaSize = 648;
+const arenaSizeOptions = [350, 500, 648, 800];
 const collisionDamageCooldown = 0.5;
 const collisionDamageRatio = 0.1;
 const fixedStepMs = 1000 / 60;
 const damageNumberDuration = 0.95;
-const battleCastDuration = 3;
-const maxBattleCastItems = 4;
+const skillCastDuration = 1.5;
+const tickerMessageLifespan = 3;
+const maxTickerMessages = 2;
 const projectileDuration = 0.26;
 const floatingPointEpsilon = 0.001;
 
@@ -52,15 +57,13 @@ export class Game {
   private rightSkillId = "sheathStrike";
   private damageNumbers: FloatingDamageSnapshot[] = [];
   private projectiles: ProjectileSnapshot[] = [];
-  private battleCast: {
-    id: number;
-    message: string;
-    age: number;
-    duration: number;
-  }[] = [];
+  private skillCasts: SkillCastSnapshot[] = [];
+  private tickerMessages: TickerMessage[] = [];
+  private tickerQueue: { text: string; level: TickerMessageLevel }[] = [];
   private nextDamageNumberId = 1;
   private nextProjectileId = 1;
-  private nextBattleCastId = 1;
+  private nextSkillCastId = 1;
+  private nextTickerId = 1;
   private chenTalentTimers = { left: 0, right: 0 };
   private repeatedStrikes: ActiveRepeatedStrike[] = [];
   private setupDrag:
@@ -106,6 +109,38 @@ export class Game {
     this.ui.arenaSizeSelect.addEventListener("change", () => {
       this.arenaSize = Number(this.ui.arenaSizeSelect.value) || defaultArenaSize;
       this.resetBattle();
+    });
+
+    this.ui.arenaSizeRandomButton.addEventListener("click", () => {
+      this.arenaSize = randomItem(arenaSizeOptions);
+      this.ui.arenaSizeSelect.value = String(this.arenaSize);
+      this.resetBattle();
+    });
+
+    this.ui.leftOperatorRandomButton.addEventListener("click", () => {
+      this.leftId = randomItem(operators).id;
+      this.leftSkillId = randomItem(this.getSelectableSkills(this.leftId)).id;
+      this.resetBattle();
+    });
+
+    this.ui.rightOperatorRandomButton.addEventListener("click", () => {
+      this.rightId = randomItem(operators).id;
+      this.rightSkillId = randomItem(this.getSelectableSkills(this.rightId)).id;
+      this.resetBattle();
+    });
+
+    this.ui.leftSkillRandomButton.addEventListener("click", () => {
+      this.leftSkillId = randomItem(this.getSelectableSkills(this.leftId)).id;
+      this.resetBattle({ preserveSetup: true });
+    });
+
+    this.ui.rightSkillRandomButton.addEventListener("click", () => {
+      this.rightSkillId = randomItem(this.getSelectableSkills(this.rightId)).id;
+      this.resetBattle({ preserveSetup: true });
+    });
+
+    this.ui.setupRandomButton.addEventListener("click", () => {
+      this.randomizeSetup();
     });
 
     this.ui.leftSelect.addEventListener("change", () => {
@@ -168,10 +203,13 @@ export class Game {
     this.summons = [];
     this.damageNumbers = [];
     this.projectiles = [];
-    this.battleCast = [];
+    this.skillCasts = [];
+    this.tickerMessages = [];
+    this.tickerQueue = [];
     this.nextDamageNumberId = 1;
     this.nextProjectileId = 1;
-    this.nextBattleCastId = 1;
+    this.nextSkillCastId = 1;
+    this.nextTickerId = 1;
     this.setupDrag = null;
 
     const leftDefinition = this.getOperator(this.leftId);
@@ -342,6 +380,44 @@ export class Game {
     operator.setFacingAngle(state.facingAngle);
   }
 
+  private randomizeSetup() {
+    if (this.running || this.elapsed > 0 || this.winnerName || !this.left || !this.right) {
+      return;
+    }
+
+    const leftPoint = this.randomSetupPoint(this.left);
+    let rightPoint = this.randomSetupPoint(this.right);
+    const minDistance =
+      this.left.definition.radius + this.right.definition.radius + 90;
+
+    for (let attempt = 0; attempt < 24; attempt += 1) {
+      if (
+        Math.hypot(rightPoint.x - leftPoint.x, rightPoint.y - leftPoint.y) >=
+        minDistance
+      ) {
+        break;
+      }
+
+      rightPoint = this.randomSetupPoint(this.right);
+    }
+
+    this.left.setPosition(leftPoint.x, leftPoint.y);
+    this.right.setPosition(rightPoint.x, rightPoint.y);
+    this.left.setFacingAngle(Math.random() * Math.PI * 2);
+    this.right.setFacingAngle(Math.random() * Math.PI * 2);
+    this.render();
+  }
+
+  private randomSetupPoint(operator: OperatorRuntime) {
+    const radius = operator.definition.radius;
+    const margin = Math.max(radius + 16, this.arenaSize * 0.08);
+
+    return {
+      x: randomBetween(margin, this.arenaSize - margin),
+      y: randomBetween(margin, this.arenaSize - margin),
+    };
+  }
+
   private loop = (time: number) => {
     const rawDelta = Math.min(0.05, (time - this.lastFrameTime) / 1000);
     this.lastFrameTime = time;
@@ -350,7 +426,9 @@ export class Game {
       this.update(rawDelta * this.speedMultiplier);
     }
 
-    this.updateBattleCast(rawDelta);
+    this.updateSkillCasts(rawDelta);
+    this.updateTickerMessages(rawDelta);
+    this.processTickerQueue();
     this.render();
     this.animationFrameId = requestAnimationFrame(this.loop);
   };
@@ -375,6 +453,9 @@ export class Game {
         age: projectile.age + deltaSeconds,
       }))
       .filter((projectile) => projectile.age < projectile.duration);
+    this.updateSkillCasts(deltaSeconds);
+    this.updateTickerMessages(deltaSeconds);
+    this.processTickerQueue();
     for (const operator of this.getAllOperators()) {
       operator.update(deltaSeconds);
     }
@@ -427,14 +508,75 @@ export class Game {
     }
 
     self.takeDamage(self.currentHp, "true");
-    this.addBattleLog(`${self.definition.name} 的奇美拉结束，强制退出战场`);
+    this.addCriticalLog(`${self.definition.name} 的奇美拉结束，强制退出战场`);
     this.checkWinner();
   }
 
-  private updateBattleCast(deltaSeconds: number) {
-    this.battleCast = this.battleCast
+  private updateSkillCasts(deltaSeconds: number) {
+    this.skillCasts = this.skillCasts
       .map((cast) => ({ ...cast, age: cast.age + deltaSeconds }))
       .filter((cast) => cast.age < cast.duration);
+  }
+
+  private updateTickerMessages(deltaSeconds: number) {
+    this.tickerMessages = this.tickerMessages
+      .map((msg) => ({ ...msg, age: msg.age + deltaSeconds }))
+      .filter((msg) => msg.age < tickerMessageLifespan);
+  }
+
+  private processTickerQueue() {
+    // Phase 1: sort queue by priority, fill empty slots
+    if (this.tickerQueue.length > 0 && this.tickerMessages.length < maxTickerMessages) {
+      this.tickerQueue.sort(
+        (a, b) => this.getLevelPriority(b.level) - this.getLevelPriority(a.level),
+      );
+
+      while (
+        this.tickerQueue.length > 0 &&
+        this.tickerMessages.length < maxTickerMessages
+      ) {
+        const item = this.tickerQueue.shift()!;
+        this.tickerMessages.push({
+          id: this.nextTickerId,
+          text: item.text,
+          level: item.level,
+          age: 0,
+        });
+        this.nextTickerId += 1;
+      }
+    }
+
+    // Phase 2: priority preemption — replace lowest-priority slot if queue has higher-priority item
+    if (
+      this.tickerQueue.length > 0 &&
+      this.tickerMessages.length === maxTickerMessages
+    ) {
+      const nextItem = this.tickerQueue[0];
+      const newPrio = this.getLevelPriority(nextItem.level);
+
+      let lowestIdx = 0;
+      let lowestPrio = this.getLevelPriority(this.tickerMessages[0].level);
+
+      for (let i = 1; i < maxTickerMessages; i += 1) {
+        const p = this.getLevelPriority(this.tickerMessages[i].level);
+
+        if (p < lowestPrio) {
+          lowestPrio = p;
+          lowestIdx = i;
+        }
+      }
+
+      if (newPrio > lowestPrio) {
+        this.tickerQueue.shift();
+        this.tickerMessages[lowestIdx] = {
+          id: this.nextTickerId,
+          text: nextItem.text,
+          level: nextItem.level,
+          age: 0,
+        };
+        this.nextTickerId += 1;
+      }
+    }
   }
 
   private updateCollisionCooldowns(deltaSeconds: number) {
@@ -483,6 +625,11 @@ export class Game {
 
     self.startSkillCooldown(self.skill.duration ?? 0, spCost);
     this.showSkillRange(self);
+    this.addSkillLog(
+      `${self.definition.name} 开启${self.skill.name}`,
+      self.skill.name,
+      self,
+    );
     self.skill.activate(skillContext);
   }
 
@@ -512,13 +659,7 @@ export class Game {
 
       while (this.chenTalentTimers[key] >= 4) {
         this.chenTalentTimers[key] -= 4;
-        const gained = this.gainTalentSp(operator, 1);
-
-        if (gained > 0) {
-          this.addBattleLog(
-            `${operator.definition.name} 的天赋为自身回复 1 点技力`,
-          );
-        }
+        this.gainTalentSp(operator, 1);
       }
     }
   }
@@ -716,7 +857,7 @@ export class Game {
         this.physics.removeBody(summon.runtime.body);
         summon.removedFromWorld = true;
         summon.redeployTimer = 35;
-        this.addBattleLog(`${summon.runtime.definition.name} 被击败，35 秒后可再次部署`);
+        this.addCriticalLog(`${summon.runtime.definition.name} 被击败，35 秒后可再次部署`);
       }
 
       summon.redeployTimer -= deltaSeconds;
@@ -728,7 +869,7 @@ export class Game {
       const redeployed = this.deployMirror(summon);
 
       if (redeployed) {
-        this.addBattleLog(`${redeployed.definition.name} 再次进入战场`);
+        this.addCriticalLog(`${redeployed.definition.name} 再次进入战场`);
         this.applyDeployEffect(redeployed);
       }
     }
@@ -1285,9 +1426,13 @@ export class Game {
     operatorB.jitterVelocity(5);
 
     this.collisionCooldowns.set(cooldownKey, collisionDamageCooldown);
-    this.addBattleLog(
-      `碰撞：${operatorA.definition.name} 造成 ${dealtToB} 碰撞伤害，${operatorB.definition.name} 造成 ${dealtToA} 碰撞伤害`,
-    );
+
+    if (dealtToB > 0 || dealtToA > 0) {
+      this.addBattleLog(
+        `碰撞：${operatorA.definition.name} 造成 ${dealtToB} 碰撞伤害，${operatorB.definition.name} 造成 ${dealtToA} 碰撞伤害`,
+      );
+    }
+
     this.checkWinner();
   }
 
@@ -1303,21 +1448,21 @@ export class Game {
     if (!this.left.isAlive && !this.right.isAlive) {
       this.winnerName = "平局";
       this.running = false;
-      this.addBattleLog("双方同时倒下，判定为平局");
+      this.addCriticalLog("双方同时倒下，判定为平局");
       return;
     }
 
     if (!this.left.isAlive) {
       this.winnerName = this.right.definition.name;
       this.running = false;
-      this.addBattleLog(`${this.right.definition.name} 获胜`);
+      this.addCriticalLog(`${this.right.definition.name} 获胜`);
       return;
     }
 
     if (!this.right.isAlive) {
       this.winnerName = this.left.definition.name;
       this.running = false;
-      this.addBattleLog(`${this.left.definition.name} 获胜`);
+      this.addCriticalLog(`${this.left.definition.name} 获胜`);
     }
   }
 
@@ -1352,7 +1497,8 @@ export class Game {
       summonStatuses: this.createSummonStatusSnapshots(),
       damageNumbers: this.damageNumbers,
       projectiles: this.projectiles,
-      battleCast: this.battleCast,
+      skillCasts: this.skillCasts,
+      tickerMessages: this.tickerMessages,
       elapsed: this.elapsed,
       running: this.running,
       winnerName: this.winnerName,
@@ -1363,9 +1509,20 @@ export class Game {
     return this.summons.map((summon) => ({
       ownerSide: summon.ownerSide,
       name: summon.runtime.definition.name,
+      ownerName: summon.owner.definition.name,
       isAlive: summon.runtime.isAlive,
       isDeployed: !summon.removedFromWorld && summon.runtime.isAlive,
       redeployRemaining: Math.max(0, summon.redeployTimer),
+      redeployTotal: 35,
+      hp: summon.runtime.currentHp,
+      maxHp: summon.runtime.maxHp,
+      sp: summon.runtime.displayedSp,
+      maxSp: summon.runtime.skill.maxSp,
+      attack: summon.runtime.attack,
+      defense: summon.runtime.defense,
+      resistance: summon.runtime.resistance,
+      skillName: summon.runtime.skill.name,
+      skillDescription: summon.runtime.skill.description,
     }));
   }
 
@@ -1409,14 +1566,46 @@ export class Game {
 
   private addBattleLog(message: string) {
     this.ui.addLog(message);
-    this.battleCast.unshift({
-      id: this.nextBattleCastId,
-      message,
+    this.pushTickerMessage(message, "a");
+  }
+
+  private addCriticalLog(message: string) {
+    this.ui.addLog(message);
+    this.pushTickerMessage(message, "c");
+  }
+
+  private getLevelPriority(level: TickerMessageLevel): number {
+    if (level === "c") return 3;
+    if (level === "s") return 2;
+    return 1;
+  }
+
+  private addSkillLog(message: string, skillName: string, operator: OperatorRuntime) {
+    this.ui.addLog(message);
+    this.pushTickerMessage(message, "s");
+    this.spawnSkillCast(skillName, roleColors[operator.definition.role], operator);
+  }
+
+  private pushTickerMessage(text: string, level: TickerMessageLevel) {
+    this.tickerQueue.push({ text, level });
+    this.processTickerQueue();
+  }
+
+  private spawnSkillCast(
+    skillName: string,
+    color: string,
+    operator: OperatorRuntime,
+  ) {
+    this.skillCasts.push({
+      id: this.nextSkillCastId,
+      name: skillName,
+      color,
+      x: operator.body.position.x,
+      y: operator.body.position.y - operator.definition.radius - 22,
       age: 0,
-      duration: battleCastDuration,
+      duration: skillCastDuration,
     });
-    this.nextBattleCastId += 1;
-    this.battleCast = this.battleCast.slice(0, maxBattleCastItems);
+    this.nextSkillCastId += 1;
   }
 
   private handleCanvasPointerDown(event: PointerEvent) {
@@ -1601,4 +1790,12 @@ interface OperatorSetupState {
 interface SetupState {
   left: OperatorSetupState;
   right: OperatorSetupState;
+}
+
+function randomItem<T>(items: T[]) {
+  return items[Math.floor(Math.random() * items.length)];
+}
+
+function randomBetween(min: number, max: number) {
+  return min + Math.random() * (max - min);
 }

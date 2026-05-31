@@ -203,16 +203,39 @@ export interface OperatorSnapshot {
 export interface SummonStatusSnapshot {
   ownerSide: "left" | "right";
   name: string;
+  ownerName: string;
   isAlive: boolean;
   isDeployed: boolean;
   redeployRemaining: number;
+  redeployTotal: number;
+  hp: number;
+  maxHp: number;
+  sp: number;
+  maxSp: number;
+  attack: number;
+  defense: number;
+  resistance: number;
+  skillName: string;
+  skillDescription: string;
 }
 
-export interface BattleCastSnapshot {
+export interface SkillCastSnapshot {
   id: number;
-  message: string;
+  name: string;
+  color: string;
+  x: number;
+  y: number;
   age: number;
   duration: number;
+}
+
+export type TickerMessageLevel = "c" | "s" | "a";
+
+export interface TickerMessage {
+  id: number;
+  text: string;
+  level: TickerMessageLevel;
+  age: number;
 }
 
 export interface FloatingDamageSnapshot {
@@ -244,7 +267,8 @@ export interface BattleSnapshot {
   summonStatuses: SummonStatusSnapshot[];
   damageNumbers: FloatingDamageSnapshot[];
   projectiles: ProjectileSnapshot[];
-  battleCast: BattleCastSnapshot[];
+  skillCasts: SkillCastSnapshot[];
+  tickerMessages: TickerMessage[];
   elapsed: number;
   running: boolean;
   winnerName: string | null;
@@ -257,13 +281,20 @@ export interface BattleUi {
   leftSkillSelect: HTMLSelectElement;
   rightSkillSelect: HTMLSelectElement;
   arenaSizeSelect: HTMLSelectElement;
+  leftOperatorRandomButton: HTMLButtonElement;
+  rightOperatorRandomButton: HTMLButtonElement;
+  leftSkillRandomButton: HTMLButtonElement;
+  rightSkillRandomButton: HTMLButtonElement;
+  arenaSizeRandomButton: HTMLButtonElement;
+  setupRandomButton: HTMLButtonElement;
   startButton: HTMLButtonElement;
   pauseButton: HTMLButtonElement;
   restartButton: HTMLButtonElement;
   speedButtons: HTMLButtonElement[];
   resultBanner: HTMLDivElement;
   timer: HTMLDivElement;
-  battleCast: HTMLDivElement;
+  tickerRow1: HTMLDivElement;
+  tickerRow2: HTMLDivElement;
   updateStatus: (snapshot: BattleSnapshot) => void;
   setOperatorOptions: (
     operators: OperatorDefinition[],
